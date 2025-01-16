@@ -276,6 +276,22 @@ def get_response_times(all_ys, exclude_nan=True):
         valid_response_times = response_times.flatten()
     return valid_response_times
 
+def get_response_times_opto(opto_ys, exclude_nan=True):
+    response_times = jnp.full((n_seeds, 1), jnp.nan)  # Default to NaN if no response is detected
+    for seed_idx in range(n_opto_seeds):
+        post_cue_activity = opto_ys[seed_idx, opto_tstart:]  # Activity after the cue
+        response_idx = jnp.argmax(post_cue_activity[:, 0] > 0.5)  # Find first timestep where y > 0.5
+        if post_cue_activity[response_idx, 0] > 0.5:
+            response_times = response_times.at[seed_idx].set((response_idx) * 0.01)
+
+    # Flatten the response_times array, excluding NaN values
+    if exclude_nan:
+        valid_response_times = response_times[~jnp.isnan(response_times)].flatten()
+    else:
+        #replace NaN with T
+        valid_response_times = response_times.flatten()
+    return valid_response_times
+
 def test_model(params_nm):
     all_inputs, all_outputs, all_masks = self_timed_movement_task(
         test_start_t, config['T_cue'], config['T_wait'], config['T_movement'], config['T']
@@ -316,7 +332,7 @@ def simulate_opto(params_nm):
 
     # Generate random keys for each seed
     rng = jax.random.PRNGKey(0)
-    batched_rng_keys = jax.random.split(rng, n_seeds)
+    batched_rng_keys = jax.random.split(rng, n_opto_seeds)
 
     # Initialize storage for all data
     all_xs_list = []
@@ -327,8 +343,8 @@ def simulate_opto(params_nm):
     for stim in stim_list:
         # Run batched simulation for all seeds
 
-        batched_inputs = jnp.repeat(all_inputs, n_seeds, axis=0)
-        batched_stim = jnp.repeat(stim[None, :], n_seeds, axis=0)
+        batched_inputs = jnp.repeat(all_inputs, n_opto_seeds, axis=0)
+        batched_stim = jnp.repeat(stim[None, :], n_opto_seeds, axis=0)
         ys, xs, zs = batched_nm_rnn(
             params_nm, x0, z0,  # x0 and z0 are generated internally
             batched_inputs, config['tau_x'], config['tau_z'],

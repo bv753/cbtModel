@@ -124,11 +124,12 @@ test_noise_std = 0.15  # Specify noise standard deviation for testing
 #test_start_t = jnp.arange(300,405,5)
 test_start_t = jnp.arange(275, 330, 5)
 #opto params
+n_opto_seeds = 300
 opto_tstart = 300 #start of cue for opto experiments
-opto_start = opto_tstart + config['T_cue'] + 80 #start of opto stimulation
-opto_end = opto_start + 100 #end of opto stimulation
-d1_stim_strength = 0.1
-d2_stim_strength = 0.1
+opto_start = opto_tstart + 100#start of opto stimulation
+opto_end = opto_start + 175 #end of opto stimulation
+d1_stim_strength = 0.3
+d2_stim_strength = 0.2
 
 control_stim = jnp.zeros((config['n_bg'],))
 suppress_d1_stim = jnp.array([-d1_stim_strength] * n_d1_cells + [0] * n_d2_cells)

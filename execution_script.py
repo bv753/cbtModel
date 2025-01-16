@@ -24,5 +24,6 @@ pf.plot_binned_responses(all_ys, all_xs, all_zs)
 
 opto_ys, opto_xs, opto_zs = mf.simulate_opto(params_nm)
 pf.plot_opto_inh(opto_ys, opto_xs, opto_zs)
+pf.plot_opto_stim(opto_ys, opto_xs, opto_zs)
 pf.plot_opto(opto_ys, opto_xs, opto_zs, newT=1000)
 response_times = mf.get_response_times(opto_ys, exclude_nan=False)

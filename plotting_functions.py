@@ -3,7 +3,6 @@ import matplotlib
 matplotlib.use('Qt5Agg')
 import numpy as np
 from scipy import stats
-import model_functions as mp
 from matplotlib.colors import LinearSegmentedColormap
 
 matplotlib.rcParams.update({'font.size': 8})  #use 8pt font everywhere
@@ -133,6 +132,7 @@ def plot_response_times(valid_response_times):
     # Plot the cumulative psychometric curve
     plt.figure(figsize=(2, 2))
     plt.plot(sorted_response_times, cumulative_proportion, marker='o', color='blue', alpha=0.7)
+    plt.xlim(0, 5)
     plt.xlabel('Response time from cue (s)')
     plt.ylabel('Proportion of Responses\n(CDF)')
     plt.grid(True)
@@ -140,21 +140,6 @@ def plot_response_times(valid_response_times):
     plt.show()
     plt.savefig('response_times_cdf.png', dpi=900)
     plt.savefig('response_times_cdf.svg')
-
-
-class roll_cmap(LinearSegmentedColormap):
-    def __init__(self, cmap, shift):
-        assert 0. < shift < 1.
-        self.cmap = cmap
-        self.name = f'rolled_{cmap.name}'
-        self.N = cmap.N
-        self.monochrome = self.cmap.monochrome
-        self._x = np.linspace(0.0, 1.0, 255)
-        self._y = np.roll(np.linspace(0.0, 1.0, 255), int(255. * shift))
-
-    def __call__(self, xi, alpha=1.0, **kw):
-        yi = np.interp(xi, self._x, self._y)
-        return self.cmap(yi, alpha)
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, alpha=1, n=100):
@@ -330,7 +315,7 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
     fig.savefig('cue_aligned_binned_activity.svg')
     fig.savefig('cue_aligned_binned_activity.png', dpi=900)
 
-def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=600):
+def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     label_list = ['control', 'inh. dSPN', 'inh. iSPN']
     inh_ys = opto_ys[0:3]
     inh_xs = opto_xs[0:3]
@@ -339,10 +324,12 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=600):
     colors = ['black', 'green', 'red']
     brain_areas = ['D1', 'D2', 'Cortex']
 
-    #plot cdf of response times for each label_list
+    '''
+    #plot histogram of response times for each label_list
     plt.figure(figsize=(2, 2))
     for stim_idx, label in enumerate(label_list):
-        response_times = mp.get_response_times(inh_ys[stim_idx], exclude_nan=False)
+        ys = inh_ys[stim_idx]
+        response_times = get_response_times_opto(ys, exclude_nan=False)
         plt.hist(response_times, bins=20, color=colors[stim_idx], alpha=0.7, edgecolor='black',density=True)
     plt.xlabel('Response time from cue (s)')
     plt.ylabel('Density')
@@ -350,13 +337,20 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=600):
     plt.show()
     plt.savefig('response_times_hist_opto_inh.png', dpi=900)
     plt.savefig('response_times_hist_opto_inh.svg')
-
+    '''
     plt.figure(figsize=(2, 2))
+    max_response_time = 0
     for stim_idx, label in enumerate(label_list):
-        response_times = mp.get_response_times(inh_ys[stim_idx], exclude_nan=False)
+        ys = inh_ys[stim_idx]
+        response_times = get_response_times_opto(ys, exclude_nan=False)
+        #max_resp = jnp.max(response_times)
+        #if max_resp > max_response_time:
+        #    max_response_time = max_resp
         sorted_response_times = jnp.sort(response_times)
         cumulative_proportion = jnp.arange(1, len(sorted_response_times) + 1) / len(sorted_response_times)
         plt.plot(sorted_response_times, cumulative_proportion, marker='o', color=colors[stim_idx], alpha=0.7)
+    #set x axis lower limit to zero
+    plt.xlim(0, 6)
     plt.xlabel('Response time from cue (s)')
     plt.ylabel('Proportion of Responses\n(CDF)')
     plt.tight_layout()
@@ -371,30 +365,131 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=600):
     ops = (opto_start - opto_tstart) / 100
     ope = (opto_end - opto_tstart) / 100
 
-    fig, axs = plt.subplots(6, 1, figsize=(2, 2), sharex=True)
+    fig, axs = plt.subplots(3, 1, figsize=(2, 3), sharex=True)
     for idx, name in enumerate(brain_areas):
         ax = axs[idx]
-        if idx == 0:
-            ax.title.set_text('Opto Inhibition')
+        #if idx == 0:
+            #ax.title.set_text('Opto Inhibition')
         for stim_idx, label in enumerate(label_list):
-            ys_mean, ys_sem = compute_mean_sem(inh_ys[stim_idx][:, :, 0])
-            nbin = len(ys_mean)
+            area_activity = get_brain_area(name, inh_xs[stim_idx], inh_zs[stim_idx]).mean(
+                axis=-1)
+            mean_activity, sem_activity = compute_mean_sem(area_activity)
+            nbin = len(mean_activity)
             t = jnp.linspace(-opto_tstart / 100, (newT - opto_tstart) / 100, nbin)
-            mask = (t > -0.5) & (t < 4)
+            mask = (t > -0.5) & (t < 5)
             t = t[mask]
-            ys_mean = ys_mean[mask]
-            ys_sem = ys_sem[mask]
-            ax.plot(t, ys_mean, c=colors[stim_idx], label=label)
-            ax.fill_between(t, ys_mean - ys_sem, ys_mean + ys_sem, color=colors[stim_idx], alpha=0.3)
-        if idx == 0:
-            ax.legend(loc='upper right', bbox_to_anchor=(0.75, 2.4))
+            mean_activity = mean_activity[mask]
+            sem_activity = sem_activity[mask]
+            ax.plot(t, mean_activity, c=colors[stim_idx], label=label)
+            ax.fill_between(t, mean_activity - sem_activity,
+                            mean_activity + sem_activity, color=colors[stim_idx], alpha=0.3)
+            ax.set_ylabel('activity (AU)')
+            #create a second axis on left, label it with the brain area
+            ax2 = ax.twinx()
+            ax2.set_ylabel(f'{name}', rotation=270, labelpad=10)
+            #get rid of ticks and labels for the second axis
+            ax2.set_yticks([])
+
+        #if idx == 0:
+        #    ax.legend(loc='upper right', bbox_to_anchor=(0.75, 2.4))
         ax.axvspan(cue_start_t, cue_end_t, color='red', alpha=0.2)
-        ax.axvspan(beh_start_t, beh_end_t, color='green', alpha=0.2)
-        ax.axvspan(ops, ope, color='gray', alpha=0.2)
+        ax.axvspan(beh_start_t, t[-1], color='green', alpha=0.2)
+        ax.axvspan(ops, ope, color='dodgerblue', alpha=0.2)
         if idx == len(brain_areas)-1:
             ax.set_xlabel('Time (s)')
     plt.tight_layout()
     plt.show()
+    plt.savefig('opto_inh_demo.svg')
+    plt.savefig('opto_inh_demo.png', dpi=900)
+
+
+def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
+    label_list = ['control', 'stim. dSPN', 'stim. iSPN']
+    stim_ys = [opto_ys[0]] + opto_ys[3:5]
+    stim_xs = [opto_xs[0]] + opto_xs[3:5]
+    stim_zs = [opto_zs[0]] + opto_zs[3:5]
+    #colors should be black for control, green for dsPN, and red for iSPN
+    colors = ['black', 'green', 'red']
+    brain_areas = ['D1', 'D2', 'Cortex']
+
+    '''
+    #plot histogram of response times for each label_list
+    plt.figure(figsize=(2, 2))
+    for stim_idx, label in enumerate(label_list):
+        ys = stim_ys[stim_idx]
+        response_times = get_response_times_opto(ys, exclude_nan=False)
+        plt.hist(response_times, bins=20, color=colors[stim_idx], alpha=0.7, edgecolor='black',density=True)
+    plt.xlabel('Response time from cue (s)')
+    plt.ylabel('Density')
+    plt.tight_layout()
+    plt.show()
+    plt.savefig('response_times_hist_opto_stim.png', dpi=900)
+    plt.savefig('response_times_hist_opto_stim.svg')
+    '''
+    plt.figure(figsize=(2, 2))
+    max_response_time = 0
+    for stim_idx, label in enumerate(label_list):
+        ys = stim_ys[stim_idx]
+        response_times = get_response_times_opto(ys, exclude_nan=False)
+        #max_resp = jnp.max(response_times)
+        #if max_resp > max_response_time:
+        #    max_response_time = max_resp
+        sorted_response_times = jnp.sort(response_times)
+        cumulative_proportion = jnp.arange(1, len(sorted_response_times) + 1) / len(sorted_response_times)
+        plt.plot(sorted_response_times, cumulative_proportion, marker='o', color=colors[stim_idx], alpha=0.7)
+    #set x axis lower limit to zero
+    plt.xlim(0, 6)
+    plt.xlabel('Response time from cue (s)')
+    plt.ylabel('Proportion of Responses\n(CDF)')
+    plt.tight_layout()
+    plt.show()
+    plt.savefig('response_times_cdf_opto_stim.png', dpi=900)
+    plt.savefig('response_times_cdf_opto_stim.svg')
+
+    cue_start_t = 0
+    cue_end_t = (cue_start_t + config['T_cue']) / 100
+    beh_start_t = config['T_wait'] / 100
+    beh_end_t = (config['T_wait'] + config['T_movement']) / 100
+    ops = (opto_start - opto_tstart) / 100
+    ope = (opto_end - opto_tstart) / 100
+
+    fig, axs = plt.subplots(3, 1, figsize=(2, 3), sharex=True)
+    for idx, name in enumerate(brain_areas):
+        ax = axs[idx]
+        #if idx == 0:
+            #ax.title.set_text('Opto stimibition')
+        for stim_idx, label in enumerate(label_list):
+            area_activity = get_brain_area(name, stim_xs[stim_idx], stim_zs[stim_idx]).mean(
+                axis=-1)
+            mean_activity, sem_activity = compute_mean_sem(area_activity)
+            nbin = len(mean_activity)
+            t = jnp.linspace(-opto_tstart / 100, (newT - opto_tstart) / 100, nbin)
+            mask = (t > -0.5) & (t < 5)
+            t = t[mask]
+            mean_activity = mean_activity[mask]
+            sem_activity = sem_activity[mask]
+            ax.plot(t, mean_activity, c=colors[stim_idx], label=label)
+            ax.fill_between(t, mean_activity - sem_activity,
+                            mean_activity + sem_activity, color=colors[stim_idx], alpha=0.3)
+            ax.set_ylabel('activity (AU)')
+            #create a second axis on left, label it with the brain area
+            ax2 = ax.twinx()
+            ax2.set_ylabel(f'{name}', rotation=270, labelpad=10)
+            #get rid of ticks and labels for the second axis
+            ax2.set_yticks([])
+
+        #if idx == 0:
+        #    ax.legend(loc='upper right', bbox_to_anchor=(0.75, 2.4))
+        ax.axvspan(cue_start_t, cue_end_t, color='red', alpha=0.2)
+        ax.axvspan(beh_start_t, t[-1], color='green', alpha=0.2)
+        ax.axvspan(ops, ope, color='dodgerblue', alpha=0.2)
+        if idx == len(brain_areas)-1:
+            ax.set_xlabel('Time (s)')
+    plt.tight_layout()
+    plt.show()
+    plt.savefig('opto_stim_demo.svg')
+    plt.savefig('opto_stim_demo.png', dpi=900)
+
 
 def plot_opto(all_ys_list, all_xs_list, all_zs_list, newT=600):
     #inhibits = ['control', 'inh. dSPN', 'inh. iSPN']
