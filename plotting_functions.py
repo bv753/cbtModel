@@ -1,14 +1,9 @@
 import matplotlib
-
 matplotlib.use('Qt5Agg')
-import numpy as np
-from scipy import stats
-from matplotlib.colors import LinearSegmentedColormap
-
 matplotlib.rcParams.update({'font.size': 8})  #use 8pt font everywhere
 import matplotlib.pyplot as plt
-#plt.switch_backend('agg')
 import numpy as np
+from scipy import stats
 from model_functions import *
 from config_script import *
 
@@ -111,7 +106,7 @@ def plot_cue_algn_activity(all_xs, all_zs):
 def plot_response_times(valid_response_times):
     max_response_time = jnp.max(valid_response_times)
     # Plot the distribution
-    plt.figure(figsize=(2, 2))
+    fig = plt.figure(figsize=(2, 2))
     plt.hist(valid_response_times, bins=20, color='blue', alpha=0.7, edgecolor='black',density=True
              )
     plt.xlabel('Response time from cue (s)')
@@ -121,8 +116,7 @@ def plot_response_times(valid_response_times):
     #set x axis lower limit to zero
     plt.xlim(0, max_response_time)
     plt.show()
-    plt.savefig('response_times_hist.png', dpi=900)
-    plt.savefig('response_times_hist.svg')
+    save_fig(fig, 'response_times_hist')
     # Sort the response times
     sorted_response_times = jnp.sort(valid_response_times)
 
@@ -130,7 +124,7 @@ def plot_response_times(valid_response_times):
     cumulative_proportion = jnp.arange(1, len(sorted_response_times) + 1) / len(sorted_response_times)
 
     # Plot the cumulative psychometric curve
-    plt.figure(figsize=(2, 2))
+    fig = plt.figure(figsize=(2, 2))
     plt.plot(sorted_response_times, cumulative_proportion, marker='o', color='blue', alpha=0.7)
     plt.xlim(0, 5)
     plt.xlabel('Response time from cue (s)')
@@ -138,8 +132,7 @@ def plot_response_times(valid_response_times):
     plt.grid(True)
     plt.tight_layout()
     plt.show()
-    plt.savefig('response_times_cdf.png', dpi=900)
-    plt.savefig('response_times_cdf.svg')
+    save_fig(fig, 'response_times_cdf')
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, alpha=1, n=100):
@@ -244,8 +237,7 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
     ax.axvspan(beh_start_t, x_axis[-1], color='green', alpha=0.2)
     plt.tight_layout()
     plt.show()
-    plt.savefig('cue_aligned_binned_responses.png', dpi=900)
-    plt.savefig('cue_aligned_binned_responses.svg')
+    save_fig(fig, 'clue_aligned_binned_responses')
 
     # Plot activity in each brain area for different response time bins (mean ± SEM) using binned xs and zs
     # Define the brain areas to plot
@@ -312,9 +304,7 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
     plt.tight_layout()
     plt.show()
     #save as .svg and .png
-    fig.savefig('cue_aligned_binned_activity.svg')
-    fig.savefig('cue_aligned_binned_activity.png', dpi=900)
-
+    save_fig(fig, 'binned_responses_by_area')
 def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     label_list = ['control', 'inh. dSPN', 'inh. iSPN']
     inh_ys = opto_ys[0:3]
@@ -338,7 +328,7 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     plt.savefig('response_times_hist_opto_inh.png', dpi=900)
     plt.savefig('response_times_hist_opto_inh.svg')
     '''
-    plt.figure(figsize=(2, 2))
+    fig = plt.figure(figsize=(2, 2))
     max_response_time = 0
     for stim_idx, label in enumerate(label_list):
         ys = inh_ys[stim_idx]
@@ -355,8 +345,7 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     plt.ylabel('Proportion of Responses\n(CDF)')
     plt.tight_layout()
     plt.show()
-    plt.savefig('response_times_cdf_opto_inh.png', dpi=900)
-    plt.savefig('response_times_cdf_opto_inh.svg')
+    save_fig(fig, 'response_times_cdf_opto_inh')
 
     cue_start_t = 0
     cue_end_t = (cue_start_t + config['T_cue']) / 100
@@ -399,9 +388,7 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
             ax.set_xlabel('Time (s)')
     plt.tight_layout()
     plt.show()
-    plt.savefig('opto_inh_demo.svg')
-    plt.savefig('opto_inh_demo.png', dpi=900)
-
+    save_fig(fig, 'opto_inh_demo')
 
 def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
     label_list = ['control', 'stim. dSPN', 'stim. iSPN']
@@ -426,7 +413,7 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
     plt.savefig('response_times_hist_opto_stim.png', dpi=900)
     plt.savefig('response_times_hist_opto_stim.svg')
     '''
-    plt.figure(figsize=(2, 2))
+    fig = plt.figure(figsize=(2, 2))
     max_response_time = 0
     for stim_idx, label in enumerate(label_list):
         ys = stim_ys[stim_idx]
@@ -443,8 +430,7 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
     plt.ylabel('Proportion of Responses\n(CDF)')
     plt.tight_layout()
     plt.show()
-    plt.savefig('response_times_cdf_opto_stim.png', dpi=900)
-    plt.savefig('response_times_cdf_opto_stim.svg')
+    save_fig(fig, 'response_times_cdf_opto_stim')
 
     cue_start_t = 0
     cue_end_t = (cue_start_t + config['T_cue']) / 100
@@ -487,8 +473,7 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
             ax.set_xlabel('Time (s)')
     plt.tight_layout()
     plt.show()
-    plt.savefig('opto_stim_demo.svg')
-    plt.savefig('opto_stim_demo.png', dpi=900)
+    save_fig(fig, 'opto_stim_demo')
 
 
 def plot_opto(all_ys_list, all_xs_list, all_zs_list, newT=600):
@@ -597,10 +582,7 @@ def plot_opto(all_ys_list, all_xs_list, all_zs_list, newT=600):
     axs[-1, 0].set_xlabel('Time (s)')
     plt.tight_layout()
     plt.show()
-    #save as .svg and .png
-    fig.savefig('opto_stim_inh_demo.svg')
-    fig.savefig('opto_stim_inh_demo.png', dpi=900)
-
+    save_fig(fig, 'opto_demo')
 
 def plot_ratio_rt_correlogram(d1d2_ratio, response_times):
     # plot a correlogram of the d1d2 ratio and response times,
@@ -654,3 +636,9 @@ def plot_ratio_rt_correlogram(d1d2_ratio, response_times):
     plt.show()
     plt.savefig('d1d2_ratio_vs_rt.png', dpi=900)
     plt.savefig('d1d2_ratio_vs_rt.svg')
+
+def save_fig(fig, name):
+    svgname = svg_folder + '/' + name + '.svg'
+    pngname = png_folder + '/' + name + '.png'
+    fig.savefig(svgname)
+    fig.savefig(pngname, dpi=900)

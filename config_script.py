@@ -2,6 +2,7 @@ from jax import random as jr
 from jax import numpy as jnp
 import optax
 import math
+import os
 
 
 def init_params(key, n_bg, n_nm, g_bg, g_nm, input_dim, output_dim):
@@ -139,3 +140,16 @@ enhance_d2_stim = jnp.array([0] * n_d1_cells + [d2_stim_strength] * n_d2_cells)
 
 spatial_stim_list = [control_stim, suppress_d1_stim, suppress_d2_stim, enhance_d1_stim,
                      enhance_d2_stim]
+
+#plot_folder
+#if there isnt a plots folder, make it
+plots_folder = 'plots'
+if not os.path.exists(plots_folder):
+    os.makedirs(plots_folder)
+svg_folder = 'plots/svg'
+if not os.path.exists(svg_folder):
+    os.makedirs(svg_folder)
+png_folder = 'plots/png'
+if not os.path.exists(png_folder):
+    os.makedirs(png_folder)
+
