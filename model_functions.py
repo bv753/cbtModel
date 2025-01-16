@@ -327,8 +327,8 @@ def simulate_opto(params_nm):
     for stim in stim_list:
         # Run batched simulation for all seeds
 
-        batched_inputs = jnp.repeat(all_inputs, num_seeds, axis=0)
-        batched_stim = jnp.repeat(stim[None, :], num_seeds, axis=0)
+        batched_inputs = jnp.repeat(all_inputs, n_seeds, axis=0)
+        batched_stim = jnp.repeat(stim[None, :], n_seeds, axis=0)
         ys, xs, zs = batched_nm_rnn(
             params_nm, x0, z0,  # x0 and z0 are generated internally
             batched_inputs, config['tau_x'], config['tau_z'],
