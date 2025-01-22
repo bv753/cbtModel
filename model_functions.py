@@ -9,17 +9,18 @@ import optax
 from config_script import *
 
 def exc(w):
+    #return jnp.maximum(0, w)
     return jnp.abs(w)
 
 
 def inh(w):
     return -jnp.abs(w)
-
+    #return -jnp.maximum(0, w)
 
 def nln(x):
-    # return jnp.maximum(0, x)
+    #x = jnp.maximum(0, x)
     return jnp.tanh(x)
-    # return jax.nn.sigmoid(x)
+    #return jax.nn.sigmoid(x)
 
 
 def multiregion_nmrnn(
@@ -55,7 +56,7 @@ def multiregion_nmrnn(
     J_bg = params['J_bg']
     B_bgc = params['B_bgc']
     J_c = params['J_c']
-    B_cu = params['B_cu'] #cue?
+    B_cu = params['B_cu'] #cue, should always be positive
     B_ct = params['B_ct']
     J_t = params['J_t']
     B_tbg = params['B_tbg']
@@ -82,8 +83,6 @@ def multiregion_nmrnn(
     n_d1_cells = num_bg_cells // 2
     n_d2_cells = num_bg_cells - n_d1_cells
     T = inputs.shape[0]
-    #get the first index where inputs == 1
-    T_start = jnp.argmax(inputs)
 
     if opto_stimulation is None:
         opto_stimulation = jnp.zeros((T, num_bg_cells))
@@ -133,18 +132,19 @@ def multiregion_nmrnn(
         # calculate y
 
         y = exc(C) @ nln(x_t) + rb # output from Thalamus
+        #rb should probably be constrained to always be positive because otherwise you can get weird bistability stuff
         return (x_bg, x_c, x_t, x_nm), (y, x_bg, x_c, x_t, x_nm)
 
     # Generate random keys for each time step
     step_keys = jr.split(step_key, T)
 
-    _, (y, x_bg, x_c, x_t, x_nm) = lax.scan(
+    _, (y, xbg, xc, xt, xnm) = lax.scan(
         lambda x_and_z, u_and_stim_rng: _step(x_and_z, u_and_stim_rng[:2], u_and_stim_rng[2]),
         (x_bg0, x_c0, x_t0, x_nm0),
         (inputs_and_stim[0], inputs_and_stim[1], step_keys),
     )
 
-    return y, (x_bg, x_c, x_t), x_nm
+    return y, (xbg, xc, xt), xnm
 
 # Update batched_nm_rnn to accept random keys
 batched_nm_rnn = vmap(
@@ -161,15 +161,16 @@ def batched_nm_rnn_loss(params, x0, z0, batch_inputs, tau_x, tau_z, batch_target
     T = batch_inputs.shape[1]
     Tarray = jnp.arange(T)
     # Assuming ys has shape (batch_size, time_steps, output_dim)
-    over_thresh = ys > 0.5
+    # Assuming ys has shape (batch_size, time_steps, output_dim)
+    over_thresh = ys >= 0.75
     first_over_threshold_indices = jnp.argmax(over_thresh, axis=1)
     idxs_to_mask = first_over_threshold_indices  # Indices to be masked
     # replace all idxs_to_mask that are lower than T_start+10 with T
     idxs_to_mask = jnp.where(idxs_to_mask < T_start_move, T_start_move,
                              idxs_to_mask)  # for all trials with no movement, start the mask at the end
-    value_mask = jnp.where(Tarray > idxs_to_mask + 50, 0, 1)  # Create the mask here
+    value_mask = jnp.where(Tarray > (idxs_to_mask + 60), 0, 1)  # Create the mask here
     value_mask = jnp.where(Tarray < idxs_to_mask, 0, value_mask)
-    batch_targets = batch_targets * value_mask[..., None]
+    batch_targets = value_mask[..., None] #* batch_targets
 
     return jnp.sum(((ys - batch_targets) ** 2) * batch_mask) / jnp.sum(batch_mask)
 
@@ -276,8 +277,8 @@ def get_response_times(all_ys, exclude_nan=True):
         valid_response_times = response_times.flatten()
     return valid_response_times
 
-def get_response_times_opto(opto_ys, exclude_nan=True):
-    response_times = jnp.full((n_seeds, 1), jnp.nan)  # Default to NaN if no response is detected
+def get_response_times_opto(opto_ys, exclude_nan=True, flatten=True):
+    response_times = jnp.full((n_opto_seeds, 1), jnp.nan)  # Default to NaN if no response is detected
     for seed_idx in range(n_opto_seeds):
         post_cue_activity = opto_ys[seed_idx, opto_tstart:]  # Activity after the cue
         response_idx = jnp.argmax(post_cue_activity[:, 0] > 0.5)  # Find first timestep where y > 0.5
@@ -286,11 +287,12 @@ def get_response_times_opto(opto_ys, exclude_nan=True):
 
     # Flatten the response_times array, excluding NaN values
     if exclude_nan:
-        valid_response_times = response_times[~jnp.isnan(response_times)].flatten()
-    else:
-        #replace NaN with T
-        valid_response_times = response_times.flatten()
-    return valid_response_times
+        response_times = response_times[~jnp.isnan(response_times)]
+
+    if flatten:
+        response_times = response_times.flatten()
+
+    return response_times
 
 def test_model(params_nm):
     all_inputs, all_outputs, all_masks = self_timed_movement_task(
@@ -342,9 +344,8 @@ def simulate_opto(params_nm):
     # Run batched experiments for each stim
     for stim in stim_list:
         # Run batched simulation for all seeds
-
         batched_inputs = jnp.repeat(all_inputs, n_opto_seeds, axis=0)
-        batched_stim = jnp.repeat(stim[None, :], n_opto_seeds, axis=0)
+        #batched_stim = jnp.repeat(stim[None, :], n_opto_seeds, axis=0)
         ys, xs, zs = batched_nm_rnn(
             params_nm, x0, z0,  # x0 and z0 are generated internally
             batched_inputs, config['tau_x'], config['tau_z'],
@@ -406,11 +407,13 @@ def align_to_cue(data, cue_start, new_T=50):
     return: shape (n_conditions, new_T, N) or (n_conditions, new_T)
     """
     n_conditions = data.shape[0]
-    T = data.shape[1]
+    time = data.shape[1]
+    ind_range = jnp.arange(time)
     new_data = []
+    if n_conditions != len(cue_start):
+        raise ValueError('n_conditions should be equal to the length of cue_start')
 
     for i, t in enumerate(cue_start):
-        ind_range = jnp.arange(T)
         mask = (ind_range >= t-100) & (ind_range < t + new_T)
         new_data.append(data[i, mask])
 
@@ -425,7 +428,7 @@ def get_d1_d2_ratio(all_xs, start=0, stop=300):
         area_activity = get_brain_area(area, all_xs)
 
         aa1 = jnp.stack(
-            [align_to_cue(area_activity_seed, test_start_t, new_T=500) for area_activity_seed in area_activity]
+            [align_to_cue(area_activity[seed], test_start_t, new_T=500) for seed in range(n_seeds)]
         )
         aa2 = aa1[:,:,100:300,:] #get the pre-movement activity
         aa3 = aa2.mean(axis=3) #average across neurons
@@ -434,5 +437,6 @@ def get_d1_d2_ratio(all_xs, start=0, stop=300):
 
     #for each trial (in dim 0), calculate the ratio of D1 to D2 activity
     ratio = area_activities[0] / area_activities[1]
+    #ratio = area_activities[0] - area_activities[1]
     ratio = ratio.flatten()
     return ratio

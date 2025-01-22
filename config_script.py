@@ -80,7 +80,7 @@ default_config = dict(
     #choose 200 random numbers between 100 and 400 for T_start
     T_start=jr.randint(key, shape=(200,), minval=100, maxval=400),
     T_cue=10,
-    T_wait = 300,
+    T_wait=300,
     T_movement=300, #three second window to move
     T=900,
     # Training
@@ -121,25 +121,27 @@ z0 = jnp.ones((config['n_nm'],)) * 0
 
 #declare testing params
 n_seeds = 50
-test_noise_std = 0.15  # Specify noise standard deviation for testing
+test_noise_std = 0.2 # Specify noise standard deviation for testing
 #test_start_t = jnp.arange(300,405,5)
 test_start_t = jnp.arange(275, 330, 5)
 #opto params
-n_opto_seeds = 300
-opto_tstart = 300 #start of cue for opto experiments
+n_opto_seeds = 1000
+opto_tstart = 250 #start of cue for opto experiments
 opto_start = opto_tstart + 100#start of opto stimulation
 opto_end = opto_start + 175 #end of opto stimulation
 d1_stim_strength = 0.3
 d2_stim_strength = 0.2
+d1_suppress_strength = 0.3
+d2_suppress_strength = 0.2
 
 control_stim = jnp.zeros((config['n_bg'],))
-suppress_d1_stim = jnp.array([-d1_stim_strength] * n_d1_cells + [0] * n_d2_cells)
-suppress_d2_stim = jnp.array([0] * n_d1_cells + [-d2_stim_strength] * n_d2_cells)
-enhance_d1_stim = jnp.array([d1_stim_strength] * n_d1_cells + [0] * n_d2_cells)
-enhance_d2_stim = jnp.array([0] * n_d1_cells + [d2_stim_strength] * n_d2_cells)
+suppress_d1 = jnp.array([-d1_suppress_strength] * n_d1_cells + [0] * n_d2_cells)
+suppress_d2 = jnp.array([0] * n_d1_cells + [-d2_suppress_strength] * n_d2_cells)
+enhance_d1 = jnp.array([d1_stim_strength] * n_d1_cells + [0] * n_d2_cells)
+enhance_d2 = jnp.array([0] * n_d1_cells + [d2_stim_strength] * n_d2_cells)
 
-spatial_stim_list = [control_stim, suppress_d1_stim, suppress_d2_stim, enhance_d1_stim,
-                     enhance_d2_stim]
+spatial_stim_list = [control_stim, suppress_d1, suppress_d2, enhance_d1,
+                     enhance_d2]
 
 #plot_folder
 #if there isnt a plots folder, make it

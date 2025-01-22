@@ -22,14 +22,19 @@ def plot_loss(losses_nm):
 
 def plot_output(all_ys):
     # Plot output activity (mean ± SEM)
-    plt.close('all')
-    fig = plt.figure(figsize=(4, 3))
+    #fig = plt.figure(figsize=(4, 3))
+    fig, axs = plt.subplots(1, 2, figsize=(4, 2), sharey=True)
     colors = plt.cm.coolwarm(jnp.linspace(0, 1, all_ys.shape[1]))
+    ax = axs[0]
+    #plot each individual trace first
+    for i in range(all_ys.shape[0]):
+        for j in range(all_ys.shape[1]):
+            ax.plot(all_ys[i, j, :, 0], c=colors[j], linewidth=0.1)
+    ax = axs[1]
     mean_ys, sem_ys = compute_mean_sem(all_ys)
-
     for i in range(mean_ys.shape[0]):
-        plt.plot(mean_ys[i, :, 0], c=colors[i])
-        plt.fill_between(
+        ax.plot(mean_ys[i, :, 0], c=colors[i])
+        ax.fill_between(
             jnp.arange(mean_ys.shape[1]),
             mean_ys[i, :, 0] - sem_ys[i, :, 0],
             mean_ys[i, :, 0] + sem_ys[i, :, 0],
@@ -43,7 +48,6 @@ def plot_output(all_ys):
 
 
 def plot_activity_by_area(all_xs, all_zs):
-    plt.close('all')
     fig = plt.figure(figsize=(8, 6))
     for idx, name in enumerate(['D1', 'D2', 'Cortex', 'Thalamus', 'SNc', 'nm']):
         ax = plt.subplot(2, 3, idx + 1)
@@ -66,37 +70,67 @@ def plot_activity_by_area(all_xs, all_zs):
 
 
 def plot_cue_algn_activity(all_xs, all_zs):
-    max_T_start = jnp.max(config['T_start'])
+    max_T_start = jnp.max(test_start_t)
     new_T = config['T'] - max_T_start
     # Plot activity aligned to cue (mean ± SEM)
     plt.close('all')
-    fig = plt.figure(figsize=(8, 6))
-    for idx, name in enumerate(['D1', 'D2', 'Cortex', 'Thalamus', 'SNc', 'nm']):
-        ax = plt.subplot(3, 3, idx + 1)
-        area_activity = get_brain_area(name, all_xs, all_zs)
 
-        mean_act, sem_act = compute_mean_sem(jnp.mean(area_activity, axis=3))  # (n_conditions, T)
-        colors = plt.cm.coolwarm(jnp.linspace(0, 1, mean_act.shape[0]))
-        for i in range(mean_act.shape[0]):
-            ax.plot(mean_act[i], c=colors[i], label=f'Condition {i}')
+    aligned_xs = [[] for n in range(3)]
+    aligned_zs = []
+    for seed_idx in range(n_seeds):
+        for i in range(3):
+            aligned_xs[i].append(align_to_cue(all_xs[i][seed_idx], test_start_t, new_T=new_T))
+        aligned_zs.append(align_to_cue(all_zs[seed_idx], test_start_t, new_T=new_T))
+    aligned_xs = [jnp.array(aligned_x) for aligned_x in aligned_xs]
+    aligned_zs = jnp.array(aligned_zs)
+    x_axis = (jnp.arange(new_T+100)-100) / 100
+
+
+    fig, axs = plt.subplots(5, 3, figsize=(6, 8), sharex=True)
+    for idx, name in enumerate(['D1', 'D2', 'Cortex', 'Thalamus', 'SNc']):
+        area_activity = get_brain_area(name, aligned_xs, aligned_zs)
+        colors = plt.cm.coolwarm(jnp.linspace(0, 1, area_activity.shape[1]))
+        area_activity = area_activity.mean(axis=-1)
+        ax = axs[idx,0]
+        for i in range(area_activity.shape[1]):
+            condition_activity = area_activity[:,i]
+            for j in range(condition_activity.shape[0]):
+                ax.plot(x_axis, condition_activity[j], c=colors[i], label=f'Condition {i}', linewidth=0.1)
+        ax = axs[idx,1]
+        for i in range(area_activity.shape[1]):
+            condition_activity = area_activity[:, i]
+            mean_act, sem_act = compute_mean_sem(condition_activity)  # (n_conditions, T)
+            ax.plot(x_axis, mean_act, c=colors[i], label=f'Condition {i}')
             ax.fill_between(
-                jnp.arange(mean_act.shape[1]),
-                mean_act[i] - sem_act[i],
-                mean_act[i] + sem_act[i],
+                x_axis,
+                mean_act - sem_act,
+                mean_act + sem_act,
                 color=colors[i],
                 alpha=0.3,
             )
-        ymin = jnp.min(mean_act - sem_act)
-        ymax = jnp.max(mean_act + sem_act)
-        ax.vlines(config['T_cue'], ymin, ymax, linestyles='dashed', label='Cue')
-        ax.vlines(config['T_cue'] + config['T_wait'], ymin, ymax, linestyles='dashed', label='Wait')
-        ax.vlines(
-            config['T_cue'] + config['T_wait'] + config['T_movement'],
-            ymin,
-            ymax,
-            linestyles='dashed',
-            label='Movement',
+        ax = axs[idx,2]
+        mean_1 = jnp.mean(area_activity, axis=1)
+        mean_act, sem_act = compute_mean_sem(mean_1)
+        ax.plot(x_axis, mean_act, c='black')
+        ax.fill_between(
+            x_axis,
+            mean_act - sem_act,
+            mean_act + sem_act,
+            color='black',
+            alpha=0.3,
         )
+
+        #ymin = jnp.min(mean_act - sem_act)
+        #ymax = jnp.max(mean_act + sem_act)
+        #ax.vlines(config['T_cue'], ymin, ymax, linestyles='dashed', label='Cue')
+        #ax.vlines(config['T_cue'] + config['T_wait'], ymin, ymax, linestyles='dashed', label='Wait')
+        #ax.vlines(
+        #    config['T_cue'] + config['T_wait'] + config['T_movement'],
+        #    ymin,
+        #    ymax,
+        #    linestyles='dashed',
+        #    label='Movement',
+        #)
         ax.set_title(f'{name} (aligned to cue')
     plt.suptitle('Aligned to cue')
     plt.tight_layout()
@@ -106,15 +140,20 @@ def plot_cue_algn_activity(all_xs, all_zs):
 def plot_response_times(valid_response_times):
     max_response_time = jnp.max(valid_response_times)
     # Plot the distribution
-    fig = plt.figure(figsize=(2, 2))
+    beh_start_t = 0
+    x_axis = jnp.linspace(0, max_response_time, 100)
+
+    fig = plt.figure(figsize=(1.8, 1.8))
     plt.hist(valid_response_times, bins=20, color='blue', alpha=0.7, edgecolor='black',density=True
              )
-    plt.xlabel('Response time from cue (s)')
+    plt.xlabel('time after cue (s)')
     plt.ylabel('Density')
     #plt.title('Distribution of Response Times')
     plt.tight_layout()
     #set x axis lower limit to zero
     plt.xlim(0, max_response_time)
+    plt.xticks([0, 3])
+    plt.axvspan(3, x_axis[-1], color='green', alpha=0.2)
     plt.show()
     save_fig(fig, 'response_times_hist')
     # Sort the response times
@@ -124,12 +163,14 @@ def plot_response_times(valid_response_times):
     cumulative_proportion = jnp.arange(1, len(sorted_response_times) + 1) / len(sorted_response_times)
 
     # Plot the cumulative psychometric curve
-    fig = plt.figure(figsize=(2, 2))
+    fig = plt.figure(figsize=(1.8, 1.8))
     plt.plot(sorted_response_times, cumulative_proportion, marker='o', color='blue', alpha=0.7)
+    plt.axvspan(3, 5, color='green', alpha=0.2)
     plt.xlim(0, 5)
-    plt.xlabel('Response time from cue (s)')
+    plt.xticks([0, 3])
+    plt.yticks([0, 0.5, 1])
+    plt.xlabel('time after cue (s)')
     plt.ylabel('Proportion of Responses\n(CDF)')
-    plt.grid(True)
     plt.tight_layout()
     plt.show()
     save_fig(fig, 'response_times_cdf')
@@ -148,16 +189,17 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
     cue_end_t = (cue_start_t + config['T_cue']) / 100
     beh_start_t = config['T_wait'] / 100
     beh_end_t = (config['T_wait'] + config['T_movement']) / 100
+    n_conditions = all_ys.shape[1]
 
-    response_times = jnp.full((n_seeds, all_ys.shape[1]), jnp.nan)  # Default to NaN if no response is detected
+    response_times = jnp.full((n_seeds, n_conditions), jnp.nan)  # Default to NaN if no response is detected
 
     for seed_idx in range(n_seeds):
-        for condition_idx in range(all_ys.shape[1]):
+        for condition_idx in range(n_conditions):
             cue_end = test_start_t[condition_idx] + config['T_cue']
             post_cue_activity = all_ys[seed_idx, condition_idx, cue_end:]  # Activity after the cue
             response_idx = jnp.argmax(post_cue_activity[:, 0] > 0.5)  # Find first timestep where y > 0.5
             if post_cue_activity[response_idx, 0] > 0.5:
-                response_times = response_times.at[seed_idx, condition_idx].set((response_idx) * 0.01)
+                response_times = response_times.at[seed_idx, condition_idx].set(response_idx * 0.01)
 
     # Define the response time bins (left closed, right open)
     bin_boundaries = [2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0]
@@ -170,13 +212,14 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
     binned_response_times = [[] for _ in bin_labels]
 
     # Assign each trial to a bin based on its response time
+
     for seed_idx in range(n_seeds):
 
         aligned_xs = [align_to_cue(all_x[seed_idx], test_start_t, new_T=500) for all_x in all_xs]
         aligned_zs = align_to_cue(all_zs[seed_idx], test_start_t, new_T=500)
         aligned_ys = align_to_cue(all_ys[seed_idx], test_start_t, new_T=500)
 
-        for condition_idx in range(all_ys.shape[1]):
+        for condition_idx in range(n_conditions): #for all cue start times
             response_time = response_times[seed_idx, condition_idx]
 
             # Find the corresponding bin for the current response time
@@ -231,8 +274,8 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
     cbar.set_ticks([0, len(bin_labels) - 1])
     cbar.set_ticklabels([str(bin_boundaries[0]), str(bin_boundaries[-1])])
 
-    ax.set_xlabel('Time after cue onset (s)')
-    ax.set_ylabel('Activity')
+    ax.set_xlabel('time after cue (s)')
+    ax.set_ylabel('activity')
     ax.axvspan(cue_start_t, cue_end_t, color='red', alpha=0.2)
     ax.axvspan(beh_start_t, x_axis[-1], color='green', alpha=0.2)
     plt.tight_layout()
@@ -242,6 +285,7 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
     # Plot activity in each brain area for different response time bins (mean ± SEM) using binned xs and zs
     # Define the brain areas to plot
     brain_areas = ['D1', 'D2', 'Cortex', 'Thalamus', 'SNc']  #, 'nm']
+    brain_area_names = ['dSPN', 'iSPN', 'Cortex', 'Thalamus', 'SNc']  #, 'NM']
     cmap = plt.cm.get_cmap('turbo')
     norm = matplotlib.colors.Normalize(vmin=0, vmax=len(bin_labels) - 1)
     # Loop through each brain area
@@ -256,11 +300,11 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
 
         # Collect the activity data from all bins and align to cue
         for bin_idx in range(len(binned_xs)):
-            aligned_xs = binned_xs[bin_idx]  # tuple of n_trials * T * n_neurons
-            aligned_zs = binned_zs[bin_idx]
+            xs_bin = binned_xs[bin_idx]  # tuple of n_trials * T * n_neurons
+            zs_bin = binned_zs[bin_idx]
 
             # Get the brain area activity (aligning to the cue)
-            area_activity = get_brain_area(name, aligned_xs, aligned_zs)  # trials * T * N
+            area_activity = get_brain_area(name, xs=xs_bin, zs=zs_bin)  # trials * T * N
 
             # Compute mean and SEM for the current bin
             mean_area_activity = jnp.mean(area_activity, axis=-1)  # trials * T
@@ -268,6 +312,10 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
             # Plot each bin with mean ± SEM
             mean_act, sem_act = compute_mean_sem(mean_area_activity)  # T
             x_axis = (jnp.array(range(mean_act.shape[0])) - 100) / 100
+            mask = (x_axis > -0.5) & (x_axis < 5)
+            x_axis = x_axis[mask]
+            mean_act = mean_act[mask]
+            sem_act = sem_act[mask]
             color = cmap(norm(bin_idx))
             ax.plot(x_axis, mean_act, label=f'{bin_labels[bin_idx]}', c=color)
             ax.fill_between(
@@ -277,11 +325,12 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
                 alpha=0.3,
                 color=color)
         if idx == n_brain_areas:
-            ax.set_xlabel('Time after cue onset (s)')
-
+            ax.set_xlabel('time after cue (s)')
+        ax.set_xticks([0, 3])
         # create a second axis on left, label it with the brain area
         ax2 = ax.twinx()
-        ax2.set_ylabel(f'{name}', rotation=270, labelpad=10)
+        nm = brain_area_names[idx]
+        ax2.set_ylabel(f'{nm}', rotation=270, labelpad=10)
         # get rid of ticks and labels for the second axis
         ax2.set_yticks([])
         # Add vertical lines for cue, wait, and movement phases
@@ -290,8 +339,8 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
         ax.axvspan(beh_start_t, x_axis[-1], color='green', alpha=0.2)
 
         if name == 'SNc':
-            ax.set_xlabel('Time after cue onset (s)')
-        ax.set_ylabel('Activity')
+            ax.set_xlabel('time after cue (s)')
+        ax.set_ylabel('activity')
     '''
     # Add a horizontal colorbar in the last subplot
     cbar_ax = axs[-1]  # Select the last subplot for the colorbar
@@ -312,7 +361,8 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     inh_zs = opto_zs[0:3]
     #colors should be black for control, green for dsPN, and red for iSPN
     colors = ['black', 'green', 'red']
-    brain_areas = ['D1', 'D2', 'Cortex']
+    brain_areas = ['D1', 'D2', 'Cortex', 'Thalamus', 'SNc']
+    brain_area_names = ['dSPN', 'iSPN', 'Cortex', 'Thalamus', 'SNc']
 
     '''
     #plot histogram of response times for each label_list
@@ -328,11 +378,11 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     plt.savefig('response_times_hist_opto_inh.png', dpi=900)
     plt.savefig('response_times_hist_opto_inh.svg')
     '''
-    fig = plt.figure(figsize=(2, 2))
+    fig = plt.figure(figsize=(1.8, 1.8))
     max_response_time = 0
     for stim_idx, label in enumerate(label_list):
         ys = inh_ys[stim_idx]
-        response_times = get_response_times_opto(ys, exclude_nan=False)
+        response_times = get_response_times_opto(ys, exclude_nan=True)
         #max_resp = jnp.max(response_times)
         #if max_resp > max_response_time:
         #    max_response_time = max_resp
@@ -340,8 +390,11 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
         cumulative_proportion = jnp.arange(1, len(sorted_response_times) + 1) / len(sorted_response_times)
         plt.plot(sorted_response_times, cumulative_proportion, marker='o', color=colors[stim_idx], alpha=0.7)
     #set x axis lower limit to zero
+    plt.axvspan(3, 6, color='green', alpha=0.2)
     plt.xlim(0, 6)
-    plt.xlabel('Response time from cue (s)')
+    plt.xticks([0, 3, 6])
+    plt.yticks([0, 0.5, 1])
+    plt.xlabel('time after cue (s)')
     plt.ylabel('Proportion of Responses\n(CDF)')
     plt.tight_layout()
     plt.show()
@@ -354,28 +407,40 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     ops = (opto_start - opto_tstart) / 100
     ope = (opto_end - opto_tstart) / 100
 
-    fig, axs = plt.subplots(3, 1, figsize=(2, 3), sharex=True)
+    resp_times = []
+    for stim_idx, label in enumerate(label_list):
+        ys = inh_ys[stim_idx]
+        resp_times.append(get_response_times_opto(ys, exclude_nan=False))
+
+    fig, axs = plt.subplots(5, 1, figsize=(2, 5), sharex=True)
     for idx, name in enumerate(brain_areas):
         ax = axs[idx]
-        #if idx == 0:
-            #ax.title.set_text('Opto Inhibition')
+
         for stim_idx, label in enumerate(label_list):
+            resps = resp_times[stim_idx]
             area_activity = get_brain_area(name, inh_xs[stim_idx], inh_zs[stim_idx]).mean(
                 axis=-1)
+            #get all indices where resps is nan, and remove the corresponding indices in the 0th dim of area_activity
+            mask = jnp.isnan(resps)
+            area_activity = area_activity[~mask]
+
             mean_activity, sem_activity = compute_mean_sem(area_activity)
             nbin = len(mean_activity)
             t = jnp.linspace(-opto_tstart / 100, (newT - opto_tstart) / 100, nbin)
-            mask = (t > -0.5) & (t < 5)
+            mask = (t > -0.5) & (t < 6)
             t = t[mask]
             mean_activity = mean_activity[mask]
             sem_activity = sem_activity[mask]
             ax.plot(t, mean_activity, c=colors[stim_idx], label=label)
             ax.fill_between(t, mean_activity - sem_activity,
                             mean_activity + sem_activity, color=colors[stim_idx], alpha=0.3)
-            ax.set_ylabel('activity (AU)')
+            ax.set_ylabel('activity')
+            #set x ticks to be 0, 3
+            ax.set_xticks([0, 3, 6])
             #create a second axis on left, label it with the brain area
             ax2 = ax.twinx()
-            ax2.set_ylabel(f'{name}', rotation=270, labelpad=10)
+            nm = brain_area_names[idx]
+            ax2.set_ylabel(f'{nm}', rotation=270, labelpad=10)
             #get rid of ticks and labels for the second axis
             ax2.set_yticks([])
 
@@ -385,7 +450,7 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
         ax.axvspan(beh_start_t, t[-1], color='green', alpha=0.2)
         ax.axvspan(ops, ope, color='dodgerblue', alpha=0.2)
         if idx == len(brain_areas)-1:
-            ax.set_xlabel('Time (s)')
+            ax.set_xlabel('time after cue (s)')
     plt.tight_layout()
     plt.show()
     save_fig(fig, 'opto_inh_demo')
@@ -397,36 +462,24 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
     stim_zs = [opto_zs[0]] + opto_zs[3:5]
     #colors should be black for control, green for dsPN, and red for iSPN
     colors = ['black', 'green', 'red']
-    brain_areas = ['D1', 'D2', 'Cortex']
+    brain_areas = ['D1', 'D2', 'Cortex', 'Thalamus', 'SNc']
+    brain_area_names = ['dSPN', 'iSPN', 'Cortex', 'Thalamus', 'SNc']
 
-    '''
-    #plot histogram of response times for each label_list
-    plt.figure(figsize=(2, 2))
-    for stim_idx, label in enumerate(label_list):
-        ys = stim_ys[stim_idx]
-        response_times = get_response_times_opto(ys, exclude_nan=False)
-        plt.hist(response_times, bins=20, color=colors[stim_idx], alpha=0.7, edgecolor='black',density=True)
-    plt.xlabel('Response time from cue (s)')
-    plt.ylabel('Density')
-    plt.tight_layout()
-    plt.show()
-    plt.savefig('response_times_hist_opto_stim.png', dpi=900)
-    plt.savefig('response_times_hist_opto_stim.svg')
-    '''
-    fig = plt.figure(figsize=(2, 2))
+
+
+    fig = plt.figure(figsize=(1.8, 1.8))
     max_response_time = 0
     for stim_idx, label in enumerate(label_list):
         ys = stim_ys[stim_idx]
-        response_times = get_response_times_opto(ys, exclude_nan=False)
-        #max_resp = jnp.max(response_times)
-        #if max_resp > max_response_time:
-        #    max_response_time = max_resp
+        response_times = get_response_times_opto(ys, exclude_nan=True)
         sorted_response_times = jnp.sort(response_times)
         cumulative_proportion = jnp.arange(1, len(sorted_response_times) + 1) / len(sorted_response_times)
         plt.plot(sorted_response_times, cumulative_proportion, marker='o', color=colors[stim_idx], alpha=0.7)
     #set x axis lower limit to zero
     plt.xlim(0, 6)
-    plt.xlabel('Response time from cue (s)')
+    plt.xticks([0, 3])
+    plt.yticks([0, 0.5, 1])
+    plt.xlabel('time after cue (s)')
     plt.ylabel('Proportion of Responses\n(CDF)')
     plt.tight_layout()
     plt.show()
@@ -439,14 +492,24 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
     ops = (opto_start - opto_tstart) / 100
     ope = (opto_end - opto_tstart) / 100
 
+    resp_times = []
+    for stim_idx, label in enumerate(label_list):
+        ys = stim_ys[stim_idx]
+        resp_times.append(get_response_times_opto(ys, exclude_nan=False))
+
+
     fig, axs = plt.subplots(3, 1, figsize=(2, 3), sharex=True)
     for idx, name in enumerate(brain_areas):
         ax = axs[idx]
-        #if idx == 0:
-            #ax.title.set_text('Opto stimibition')
+
         for stim_idx, label in enumerate(label_list):
+            resps = resp_times[stim_idx]
             area_activity = get_brain_area(name, stim_xs[stim_idx], stim_zs[stim_idx]).mean(
                 axis=-1)
+            #get all indices where resps is nan, and remove the corresponding indices in the 0th dim of area_activity
+            mask = jnp.isnan(resps)
+            area_activity = area_activity[~mask]
+
             mean_activity, sem_activity = compute_mean_sem(area_activity)
             nbin = len(mean_activity)
             t = jnp.linspace(-opto_tstart / 100, (newT - opto_tstart) / 100, nbin)
@@ -458,9 +521,12 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
             ax.fill_between(t, mean_activity - sem_activity,
                             mean_activity + sem_activity, color=colors[stim_idx], alpha=0.3)
             ax.set_ylabel('activity (AU)')
+            #set x ticks to be 0, 3
+            ax.set_xticks([0, 3])
             #create a second axis on left, label it with the brain area
             ax2 = ax.twinx()
-            ax2.set_ylabel(f'{name}', rotation=270, labelpad=10)
+            nm = brain_area_names[idx]
+            ax2.set_ylabel(f'{nm}', rotation=270, labelpad=10)
             #get rid of ticks and labels for the second axis
             ax2.set_yticks([])
 
@@ -517,7 +583,6 @@ def plot_opto(all_ys_list, all_xs_list, all_zs_list, newT=600):
     ops = (opto_start - opto_tstart) / 100
     ope = (opto_end - opto_tstart) / 100
     # Plot output activity with error bars
-    plt.close('all')
 
     # Plot mean activity in each brain area with error bars
     fig, axs = plt.subplots(6, 2, figsize=(4, 6), sharex=True, sharey=False)
@@ -610,7 +675,7 @@ def plot_ratio_rt_correlogram(d1d2_ratio, response_times):
     d1d2_ratio = np.array(d1d2_ratio)
 
     plt.close('all')
-    fig, ax = plt.subplots(1, 1, figsize=(2.5, 2.5))
+    fig, ax = plt.subplots(1, 1, figsize=(2, 3))
     ax.scatter(response_times, d1d2_ratio, c='blue', alpha=0.1)
     #calculate and plot a linear regression line for the regression
     slope, intercept, r_value, p_value, std_err = stats.linregress(response_times, d1d2_ratio)
@@ -626,12 +691,14 @@ def plot_ratio_rt_correlogram(d1d2_ratio, response_times):
     line = slope * response_times + intercept
     ax.plot(response_times, line, c='black', label=f'y={slope:.2f}x+{intercept:.2f}')
     #above the line, plot the r2 and p value
-    ax.text(0.9, 0.5, f'R^2={r_value:.2f}', ha='right', va='center', transform=ax.transAxes)
-    ax.text(0.9, 0.4, p_val_str, ha='right', va='center', transform=ax.transAxes)
-
-    ax.set_ylabel('D1:D2 ratio')
-    ax.set_xlabel('Response time (s)')
-    ax.set_title('D1:D2 ratio vs. Response time')
+    text_str = f'R^2={r_value:.2f}\n{p_val_str}'
+    ax.text(0.9, 0.9, text_str, ha='right', va='top', transform=ax.transAxes)
+    #set the y limit from 0 to 5
+    ax.set_ylim(2, 5)
+    ax.set_yticks([2, 3, 4, 5])
+    ax.set_ylabel('dSPN/iSPN activity')
+    ax.set_xlabel('time after cue (s)')
+    #ax.set_title('D1:D2 ratio vs. Response time')
     plt.tight_layout()
     plt.show()
     plt.savefig('d1d2_ratio_vs_rt.png', dpi=900)
