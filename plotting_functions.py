@@ -3,6 +3,8 @@ matplotlib.use('Qt5Agg')
 matplotlib.rcParams.update({'font.size': 8})  #use 8pt font everywhere
 import matplotlib.pyplot as plt
 import numpy as np
+#import filter for gaussian smoothing
+from scipy.ndimage import gaussian_filter1d
 from scipy import stats
 from model_functions import *
 from config_script import *
@@ -341,19 +343,60 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
         if name == 'SNc':
             ax.set_xlabel('time after cue (s)')
         ax.set_ylabel('activity')
-    '''
-    # Add a horizontal colorbar in the last subplot
-    cbar_ax = axs[-1]  # Select the last subplot for the colorbar
-    sm = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
-    cbar = plt.colorbar(sm, cax=cbar_ax, orientation='horizontal')
-    cbar.set_label("Response Time Bins")
-    cbar.set_ticks([0, len(bin_labels) - 1])
-    cbar.set_ticklabels([bin_labels[0], bin_labels[-1]])
-    '''
+    save_fig(fig, 'binned_responses_by_area')
+
+    #plot the ratio of d1/d2 activity
+    fig, axs = plt.subplots(1, 1, figsize=(2, 2), sharex=True)
+    ax = axs
+
+    # Collect the activity data from all bins and align to cue
+    for bin_idx in range(len(binned_xs)):
+        xs_bin = binned_xs[bin_idx]  # tuple of n_trials * T * n_neurons
+        zs_bin = binned_zs[bin_idx]
+
+        # Get the brain area activity (aligning to the cue)
+        d1_activity = get_brain_area('D1', xs=xs_bin, zs=zs_bin)  # trials * T * N
+        d2_activity = get_brain_area('D2', xs=xs_bin, zs=zs_bin)  # trials * T * N
+
+        #get rid of all negative values in mean_ratio
+        mean_d1 = jnp.mean(d1_activity, axis=-1)  # trials * T
+        mean_d2 = jnp.mean(d2_activity, axis=-1)  # trials * T
+
+        ratio_activity = mean_d1 / mean_d2
+        #replace all negative values with nan
+        ratio_activity = jnp.where(ratio_activity < 0, jnp.nan, ratio_activity)
+        # Compute mean and SEM for the current bin
+        mean_act = jnp.nanmean(ratio_activity, axis=0)  # T
+        #log mean_act
+        mean_act = jnp.log(mean_act)
+        #smooth w gaussian kernel
+        mean_act = gaussian_filter1d(mean_act, 10)
+
+        x_axis = (jnp.array(range(mean_act.shape[0])) - 100) / 100
+        mask = (x_axis >= -0.5) & (x_axis < 5)
+        x_axis = x_axis[mask]
+        mean_act = mean_act[mask]
+        #sem_act = sem_act[mask]
+        color = cmap(norm(bin_idx))
+        ax.plot(x_axis, mean_act, label=f'{bin_labels[bin_idx]}', c=color)
+        '''ax.fill_between(
+            x_axis,
+            mean_act - sem_act,
+            mean_act + sem_act,
+            alpha=0.3,
+            color=color)'''
+    ax.set_xlabel('time after cue (s)')
+    ax.set_xticks([0, 3])
+    # create a second axis on left, label it with the brain area
+
+    ax.axvspan(cue_start_t, cue_end_t, color='red', alpha=0.2)
+    ax.axvspan(beh_start_t, x_axis[-1], color='green', alpha=0.2)
+    ax.set_ylabel('log(dSPN/iSPN activity)')
+    #ax.set_yscale('symlog')
     plt.tight_layout()
     plt.show()
     #save as .svg and .png
-    save_fig(fig, 'binned_responses_by_area')
+    save_fig(fig, 'binned_responses_D1D2ratio')
 def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     label_list = ['control', 'inh. dSPN', 'inh. iSPN']
     inh_ys = opto_ys[0:3]
@@ -498,7 +541,7 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
         resp_times.append(get_response_times_opto(ys, exclude_nan=False))
 
 
-    fig, axs = plt.subplots(3, 1, figsize=(2, 3), sharex=True)
+    fig, axs = plt.subplots(5, 1, figsize=(2, 5), sharex=True)
     for idx, name in enumerate(brain_areas):
         ax = axs[idx]
 

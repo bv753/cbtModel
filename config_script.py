@@ -120,7 +120,7 @@ x0 = (x_bg0, x_c0, x_t0)
 z0 = jnp.ones((config['n_nm'],)) * 0
 
 #declare testing params
-n_seeds = 50
+n_seeds = 100
 test_noise_std = 0.2 # Specify noise standard deviation for testing
 #test_start_t = jnp.arange(300,405,5)
 test_start_t = jnp.arange(275, 330, 5)
