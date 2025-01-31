@@ -7,7 +7,7 @@ with open('params_nm.pkl', 'rb') as f:
     params_nm = pkl.load(f)
 
 ####TESTING###############
-all_ys, all_xs, all_zs = mf.test_model(params_nm, noise=True)
+all_ys, all_xs, all_zs = mf.test_model(params_nm, noise=False)
 
 pf.plot_output(all_ys)
 pf.plot_activity_by_area(all_xs, all_zs)

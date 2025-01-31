@@ -76,6 +76,7 @@ def plot_cue_algn_activity(all_xs, all_zs, noiseless=False):
     max_T_start = jnp.max(cs.test_start_t)
     new_T = cs.config['T'] - max_T_start
     # Plot activity aligned to cue (mean ± SEM)
+    plt.close('all')
 
     aligned_xs = [[] for n in range(3)]
     aligned_zs = []
@@ -684,6 +685,7 @@ def plot_ratio_rt_correlogram(d1d2_ratio, response_times):
     response_times = np.array(response_times)
     d1d2_ratio = np.array(d1d2_ratio)
 
+    plt.close('all')
     fig, ax = plt.subplots(1, 1, figsize=(2, 3))
     ax.scatter(response_times, d1d2_ratio, c='blue', alpha=0.1)
     #calculate and plot a linear regression line for the regression

@@ -72,20 +72,20 @@ default_config = dict(
     # Model Hyperparameters
     tau_x=10,
     tau_z=100,
-    noise_std=0.05,#0.1,  # Standard deviation of noise
+    noise_std=0.1,  # Standard deviation of noise
     # Timing (task) parameters
     dt=10, # ms
     # Data Generation
     #T_start = jnp.arange(300,405,5),
     #choose 200 random numbers between 100 and 400 for T_start
-    T_start=jr.randint(key, shape=(100,), minval=150, maxval=300),
+    T_start=jr.randint(key, shape=(200,), minval=100, maxval=400),
     T_cue=10,
     T_wait=300,
-    T_movement=50, #0.5s movement time
-    T=700,
+    T_movement=300, #three second window to move
+    T=900,
     # Training
     num_nm_only_iters=0,
-    num_full_train_iters=50000,
+    num_full_train_iters=10000,
     keyind=13,
 )
 
@@ -113,17 +113,17 @@ optimizer = optax.chain(
   optax.adamw(learning_rate=1e-3),
 )
 
-x_bg0 = jnp.ones((config['n_bg'],)) * 0.1
-x_c0 = jnp.ones((config['n_bg'],)) * 0.1
-x_t0 = jnp.ones((config['n_bg'],)) * 0.1
+x_bg0 = jnp.ones((config['n_bg'],)) * 0
+x_c0 = jnp.ones((config['n_bg'],)) * 0
+x_t0 = jnp.ones((config['n_bg'],)) * 0
 x0 = (x_bg0, x_c0, x_t0)
-z0 = jnp.ones((config['n_nm'],)) * 0.1
+z0 = jnp.ones((config['n_nm'],)) * 0
 
 #declare testing params
 n_seeds = 100
-test_noise_std = 0.3 # Specify noise standard deviation for testing
+test_noise_std = 0.2 # Specify noise standard deviation for testing
 #test_start_t = jnp.arange(300,405,5)
-test_start_t = jnp.arange(100, 200, 5)
+test_start_t = jnp.arange(275, 330, 5)
 #opto params
 n_opto_seeds = 1000
 opto_tstart = 250 #start of cue for opto experiments
