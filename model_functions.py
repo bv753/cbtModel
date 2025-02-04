@@ -22,207 +22,8 @@ def nln(x):
     return jnp.tanh(x)
     #return jax.nn.sigmoid(x)
 
-def zerofloor(x):
-    return jnp.maximum(0, x)
 
 def multiregion_nmrnn(
-    params,
-    x_0,       # tuple of (x_bg0, x_c0, x_t0)
-    z_0,       # initial state for x_nm
-    inputs,
-    tau_x,
-    tau_z,
-    modulation=True,
-    opto_stimulation=None,
-    noise_std=0,
-    rng_key=None
-):
-    """
-    A multi-region RNN with BG, cortex, thalamus, and a neuromodulatory population.
-    This version pre-samples noise across time and moves constant computations
-    (such as tbg, U, V, etc.) outside the per-step function to reduce overhead.
-    """
-
-    # If no RNG key is provided, make a default one.
-    if rng_key is None:
-        rng_key = jr.PRNGKey(0)
-    # We will use three splits:
-    #   1. for adding noise to the initial states
-    #   2. for generating the noise arrays for x states
-    #   3. for generating the noise arrays for the NM state
-    rng_key, init_key, noise_key = jr.split(rng_key, 3)
-
-    # Unpack initial states
-    x_bg0, x_c0, x_t0 = x_0
-    x_nm0 = z_0
-
-    # If needed, add noise to initial states once
-    if noise_std > 0:
-        x_bg0 = x_bg0 + noise_std * jr.normal(init_key, x_bg0.shape)
-        x_c0  = x_c0  + noise_std * jr.normal(init_key, x_c0.shape)
-        x_t0  = x_t0  + noise_std * jr.normal(init_key, x_t0.shape)
-        x_nm0 = x_nm0 + noise_std * jr.normal(init_key, x_nm0.shape)
-
-    # Pull parameters out of the dictionary
-    J_bg   = params['J_bg']
-    B_bgc  = params['B_bgc']
-    J_c    = params['J_c']
-    B_cu   = params['B_cu']
-    B_ct   = params['B_ct']
-    J_t    = params['J_t']
-    B_tbg  = params['B_tbg']
-    J_nm   = params['J_nm']
-    B_nmc  = params['B_nmc']
-    J_nmc  = params['J_nmc']  # not obviously used below, but in your code
-    m      = params['m']
-    c      = params['c']
-    C      = params['C']
-    rb     = params['rb']
-    U      = params['U']      # unused if you're overriding
-    V_bg   = params['V_bg']   # unused if you're overriding
-    V_c    = params['V_c']    # unused if you're overriding
-
-    tau_c  = tau_x
-    tau_bg = tau_x
-    tau_t  = tau_x
-    tau_nm = tau_z
-
-    num_bg_cells = J_bg.shape[0]
-    num_c_cells  = J_c.shape[0]
-    num_t_cells  = J_t.shape[0]
-    num_nm_cells = J_nm.shape[0]
-    n_d1_cells   = num_bg_cells // 2
-    n_d2_cells   = num_bg_cells - n_d1_cells
-
-    # Time steps
-    T = inputs.shape[0]
-
-    # Default opto stimulation if none
-    if opto_stimulation is None:
-        opto_stimulation = jnp.zeros((T, num_bg_cells))
-
-    # Precompute any constant slices or expansions that don't depend on time
-    # For the BG->thalamus connection: D1 portion excitatory vs D2 inhibitory
-    tbg = jnp.concatenate(
-        (exc(B_tbg[:, :n_d1_cells]), inh(B_tbg[:, n_d1_cells:])),
-        axis=1
-    )
-
-    # For neuromodulation, if `modulation=True`, define constant matrices
-    if modulation:
-        # Example: direct vs indirect
-        U_const_bg = jnp.concatenate(
-            (jnp.ones((n_d1_cells, 1)), -jnp.ones((n_d2_cells, 1)))
-        )
-        V_bg_const = jnp.ones((num_bg_cells, 1))
-        V_c_const  = jnp.ones((num_c_cells, 1))
-    else:
-        U_const_bg = None
-        V_bg_const = None
-        V_c_const  = None
-
-    # Pre-sample noise for each time step
-    # We'll scale the noise by sqrt(2 * tau) factors
-    if noise_std > 0:
-        rng_bg, rng_c, rng_t, rng_nm = jr.split(noise_key, 4)
-        coef_x = noise_std / math.sqrt(2 * tau_x)
-        coef_z = noise_std / math.sqrt(2 * tau_z)
-
-        noise_bg = coef_x * jr.normal(rng_bg, (T, num_bg_cells))
-        noise_c  = coef_x * jr.normal(rng_c,  (T, num_c_cells))
-        noise_t  = coef_x * jr.normal(rng_t,  (T, num_t_cells))
-        noise_nm = coef_z * jr.normal(rng_nm, (T, num_nm_cells))
-    else:
-        # If no noise, just define zero arrays
-        noise_bg = jnp.zeros((T, num_bg_cells))
-        noise_c  = jnp.zeros((T, num_c_cells))
-        noise_t  = jnp.zeros((T, num_t_cells))
-        noise_nm = jnp.zeros((T, num_nm_cells))
-
-    # Per-step update function
-    def _step(carry, step_data):
-        (x_bg, x_c, x_t, x_nm) = carry
-        (u, stim, n_bg, n_c, n_t, n_nm) = step_data
-
-        # Add pre-sampled noise
-        x_bg = x_bg + n_bg
-        x_c  = x_c  + n_c
-        x_t  = x_t  + n_t
-        x_nm = x_nm + n_nm
-
-        # Update cortex
-        x_c = (1.0 - (1. / tau_c)) * x_c + (1. / tau_c) * (J_c @ nln(x_c))
-        # External input to cortex
-        x_c = x_c + (1. / tau_c) * (B_cu @ u)
-        # Thalamic -> cortex input
-        x_c = x_c + (1. / tau_c) * (exc(B_ct) @ nln(x_t))
-
-        # Possibly modulate BG synapses
-        if modulation:
-            # s could be 1-D if m is shape (1, num_nm_cells), etc.
-            s = jax.nn.sigmoid(exc(m) @ nln(x_nm) + c)
-            # Expand s into a matrix if needed
-            G_bg = jnp.exp(s * (U_const_bg @ V_bg_const.T))  # shape (num_bg_cells,num_bg_cells)
-            G_c  = jnp.exp(s * (U_const_bg @ V_c_const.T))    # shape (num_bg_cells,num_c_cells)
-        else:
-            G_bg = jnp.ones((num_bg_cells, num_bg_cells))
-            G_c  = jnp.ones((num_bg_cells, num_c_cells))
-
-        # Update BG
-        # Inhibitory recurrent BG
-        x_bg = (1.0 - (1. / tau_bg)) * x_bg + (1. / tau_bg) * (
-            (G_bg * inh(J_bg)) @ nln(x_bg)
-        )
-        # Excitatory input from cortex
-        x_bg = x_bg + (1. / tau_bg) * ((G_c * exc(B_bgc)) @ nln(x_c))
-        # Optional external stimulation
-        x_bg = x_bg + (1. / tau_bg) * stim
-
-        # Update thalamus
-        x_t = (1.0 - (1. / tau_t)) * x_t + (1. / tau_t) * (J_t @ nln(x_t))
-        # BG -> thalamus (D1 vs D2)
-        x_t = x_t + (1. / tau_t) * (tbg @ nln(x_bg))
-
-        # Update neuromod population
-        x_nm = (1.0 - (1. / tau_nm)) * x_nm + (1. / tau_nm) * (J_nm @ nln(x_nm))
-        x_nm = x_nm + (1. / tau_nm) * (exc(B_nmc) @ nln(x_c))
-
-        #After final update for each population, clamp near 0:
-        x_bg = jnp.maximum(0.00001, x_bg)
-
-        # Output readout from Thalamus
-        y = (exc(C) @ nln(x_t)) + rb
-
-        return (x_bg, x_c, x_t, x_nm), (y, x_bg, x_c, x_t, x_nm)
-
-    # We will iterate over time steps [0..T-1].
-    # Each step, we pull out the slice of inputs, opto_stimulation, and noise arrays.
-    def scan_fun(carry, t):
-        (x_bg, x_c, x_t, x_nm) = carry
-        # Grab data at time t
-        u     = inputs[t]
-        stim  = opto_stimulation[t]
-        n_bg  = noise_bg[t]
-        n_c   = noise_c[t]
-        n_t   = noise_t[t]
-        n_nm  = noise_nm[t]
-
-        return _step((x_bg, x_c, x_t, x_nm), (u, stim, n_bg, n_c, n_t, n_nm))
-
-    # Run the scan
-    init_carry = (x_bg0, x_c0, x_t0, x_nm0)
-    (final_carry, scan_outputs) = lax.scan(scan_fun, init_carry, jnp.arange(T))
-    # scan_outputs is a tuple of arrays: (y, x_bg, x_c, x_t, x_nm) each shape = (T, ...)
-
-    (y, xbg, xc, xt, xnm) = scan_outputs
-
-    # Return the time series of y, and also the hidden states
-    return y, (xbg, xc, xt), xnm
-
-
-
-
-def multiregion_nmrnn_deprecated(
     params, x_0, z_0, inputs, tau_x, tau_z, modulation=True, opto_stimulation=None, noise_std=0, rng_key=None
 ):
     """
@@ -287,13 +88,6 @@ def multiregion_nmrnn_deprecated(
         opto_stimulation = jnp.zeros((T, num_bg_cells))
     inputs_and_stim = (inputs, opto_stimulation)
 
-    if modulation:
-        U_const = jnp.concatenate(
-            (jnp.ones((n_d1_cells, 1)), -1 * jnp.ones((n_d2_cells, 1)))
-        )
-        V_bg_const = jnp.ones((num_bg_cells, 1))
-        V_c_const  = jnp.ones((num_c_cells, 1))
-
     def _step(x_and_z, u_and_stim, step_rng_key):
         x_bg, x_c, x_t, x_nm = x_and_z
         u, stim = u_and_stim
@@ -313,24 +107,16 @@ def multiregion_nmrnn_deprecated(
         x_c += (1. / tau_c) * exc(B_ct) @ nln(x_t) # input from thalamus, excitatory
 
         if modulation:
-            s = jax.nn.sigmoid(exc(m) @ nln(x_nm) + c)
-            G_bg = jnp.exp(s * (U_const @ V_bg_const.T))
-            G_c = jnp.exp(s * (U_const @ V_c_const.T))
-        else:
-            G_bg = jnp.ones((num_bg_cells, num_bg_cells))
-            G_c = jnp.ones((num_bg_cells, num_c_cells))
-        '''
-                if modulation:
             U = jnp.concatenate((jnp.ones((n_d1_cells, 1)), -1 * jnp.ones((n_d2_cells, 1)))) # direct/indirect
             V_bg = jnp.ones((num_bg_cells, 1))
             V_c = jnp.ones((num_c_cells, 1))
             s = jax.nn.sigmoid(exc(m) @ nln(x_nm) + c) # neuromodulatory signal (1D for now)
             G_bg = jnp.exp(s * U @ V_bg.T) # TODO: change to matrix U, V + vector s (for multidimensional NM)
+            #the way this works out, the first half of G_bg is greater than 1, the second half is less than 1
             G_c = jnp.exp(s * U @ V_c.T) # num_bg_cells x num_c_cells
         else:
             G_bg = jnp.ones((num_bg_cells, num_bg_cells))
             G_c = jnp.ones((num_bg_cells, num_c_cells))
-        '''
 
         x_bg = (1.0 - (1. / tau_bg)) * x_bg + (1. / tau_bg) * (G_bg * inh(J_bg)) @ nln(x_bg) # recurrent dynamics, inhibitory
         x_bg += (1. / tau_bg) * (G_c * exc(B_bgc)) @ nln(x_c) # input from cortex, excitatory
@@ -340,7 +126,6 @@ def multiregion_nmrnn_deprecated(
         x_t = (1.0 - (1. / tau_t)) * x_t + (1. / tau_t) * J_t @ nln(x_t) # recurrent dynamics
         tbg = jnp.concatenate((exc(B_tbg[:, : n_d1_cells]), inh(B_tbg[:, n_d1_cells: ])), axis=1) # two subpopulations have the opposite net effects
         x_t += (1. / tau_t) * tbg @ nln(x_bg) # input from BG, inhibitory
-        #x_t = zerofloor(x_t) # floor at 0
 
         # update x_nm
         x_nm = (1.0 - (1. / tau_nm)) * x_nm + (1. / tau_nm) * J_nm @ nln(x_nm)
@@ -368,27 +153,25 @@ batched_nm_rnn = vmap(
     in_axes=(None, None, None, 0, None, None, None, None, None, 0)  # Add random key as batched input
 )
 
-
 def batched_nm_rnn_loss(params, x0, z0, batch_inputs, tau_x, tau_z, batch_targets, batch_mask, rng_keys, orth_u=True,
                         modulation=True, noise_std=0):
     ys, _, _ = batched_nm_rnn(params, x0, z0, batch_inputs, tau_x, tau_z, modulation, None, noise_std, rng_keys)
-    '''
-        # Create the final mask based on first over-threshold index
+
+    # Create the final mask based on first over-threshold index
     T_start_move = jnp.argmax(batch_targets, axis=1)
     T = batch_inputs.shape[1]
     Tarray = jnp.arange(T)
     # Assuming ys has shape (batch_size, time_steps, output_dim)
     # Assuming ys has shape (batch_size, time_steps, output_dim)
-    over_thresh = ys >= 0.5
-    movement_times = jnp.argmax(over_thresh, axis=1)
+    over_thresh = ys >= 0.75
+    first_over_threshold_indices = jnp.argmax(over_thresh, axis=1)
+    idxs_to_mask = first_over_threshold_indices  # Indices to be masked
     # replace all idxs_to_mask that are lower than T_start+10 with T
-    ends_to_mask = jnp.where(movement_times < T_start_move, T-100,
-                             movement_times)  # for all trials with no movement, start the mask at the end
-    starts_to_mask = jnp.where(movement_times < T_start_move, T_start_move, movement_times)
-    end_mask = jnp.where(Tarray > (ends_to_mask + 100), 0, 1)  # Create the mask here
-    value_mask = jnp.where(Tarray < starts_to_mask, 0, end_mask)
+    idxs_to_mask = jnp.where(idxs_to_mask < T_start_move, T_start_move,
+                             idxs_to_mask)  # for all trials with no movement, start the mask at the end
+    value_mask = jnp.where(Tarray > (idxs_to_mask + 60), 0, 1)  # Create the mask here
+    value_mask = jnp.where(Tarray < idxs_to_mask, 0, value_mask)
     batch_targets = value_mask[..., None] #* batch_targets
-'''
 
     return jnp.sum(((ys - batch_targets) ** 2) * batch_mask) / jnp.sum(batch_mask)
 
@@ -613,7 +396,7 @@ def get_brain_area_(brain_area, xs=None, zs=None):
     else:
         raise ValueError('Invalid brain area')
 def get_brain_area(brain_area, xs=None, zs=None):
-    return jnp.tanh(get_brain_area_(brain_area, xs, zs))
+    return get_brain_area_(brain_area, xs, zs)
 
 def sem(data, axis=0):
     return jnp.std(data, axis=axis) / jnp.sqrt(data.shape[axis] - 1)
@@ -622,7 +405,7 @@ def sem(data, axis=0):
 def compute_mean_sem(data):
     return jnp.mean(data, axis=0), sem(data, axis=0)
 
-def align_to_cue(data, cue_start, new_T=50):
+def align_to_cue(data, cue_start, bsln_sub=True, new_T=50):
     """
     align data to the cue
     data: shape (n_conditions, T, N) or (n_conditions, T)
@@ -640,7 +423,19 @@ def align_to_cue(data, cue_start, new_T=50):
         mask = (ind_range >= t-100) & (ind_range < t + new_T)
         new_data.append(data[i, mask])
 
-    return jnp.stack(new_data)
+    cue_aligned = jnp.stack(new_data)
+    if bsln_sub:
+        bsln = cue_aligned[:, :100].mean(axis=1)
+        cue_aligned = cue_aligned - bsln[:, None]
+    return cue_aligned
+
+def baseline_subtract(cue_aligned_data):
+    #get the first 100 time bins of each trial and average across them
+    #then average across trials
+    bsln = cue_aligned_data[:, :, :100, :].mean(axis=2)
+    # add empty dimensions in idx 2 to bsln
+    bsln = bsln[:, :, None, :]
+    return cue_aligned_data - bsln
 
 
 def get_d1_d2_ratio(all_xs, start=0, stop=300):
@@ -649,10 +444,11 @@ def get_d1_d2_ratio(all_xs, start=0, stop=300):
     area_activities = []
     for area in brain_areas:
         area_activity = get_brain_area(area, all_xs)
-
         aa1 = jnp.stack(
             [align_to_cue(area_activity[seed], test_start_t, new_T=500) for seed in range(n_seeds)]
         )
+        aa1 = baseline_subtract(aa1)
+
         aa2 = aa1[:,:,100:300,:] #get the pre-movement activity
         aa3 = aa2.mean(axis=3) #average across neurons
         aa4 = aa3.mean(axis=2) #average across time
