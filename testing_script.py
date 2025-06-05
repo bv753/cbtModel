@@ -17,7 +17,7 @@ v_response_times = mf.get_response_times(all_ys, exclude_nan=True)
 pf.plot_response_times(v_response_times)
 
 response_times = mf.get_response_times(all_ys, exclude_nan=False)
-d1d2_ratio = mf.get_d1_d2_ratio(all_xs)
+d1d2_ratio = mf.get_d1_d2_ratio(all_xs, avg_time=True)
 pf.plot_ratio_rt_correlogram(d1d2_ratio, response_times)
 pf.plot_d1d2ratio_SNc_correlogram(d1d2_ratio, all_zs, response_times)
 pf.plot_d1d2ratio_slope_correlogram(all_xs, response_times)

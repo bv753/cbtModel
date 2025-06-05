@@ -773,50 +773,51 @@ def plot_d1d2ratio_SNc_correlogram(d1d2_ratio, all_zs, response_times):
 
 
 def plot_d1d2ratio_slope_correlogram(all_xs, response_times):
-    d1d2_ratio = mf.get_d1_d2_ratio(all_xs, remove_outliers=True)
-    slopes = mf.get_slope(all_xs, remove_outliers=True)
+    t_start = 100
+    t_end = 300
+    d1d2_ratio = mf.get_d1_d2_ratio(all_xs, t_start, t_end, avg_time=True, remove_outliers=False)
+    slopes = mf.get_slope(all_xs, t_start, t_end, avg_neurons=True, remove_outliers=False)
     slopes = slopes[0]
     brain_areas = ['cortex']  #, 'thalamus']
     # verify d1d2_ratio, snc, and response_times all have the same shape, else throw exception
-    if d1d2_ratio.shape != slopes[0].shape or slopes[0].shape != response_times.shape:
+    if d1d2_ratio.shape != slopes.shape or slopes.shape != response_times.shape:
         raise Exception('d1d2_ratio, slopes, and response_times must have the same shape')
 
     # mark response time outliers as nan in d1d2_ratio and snc
     d1d2_ratio = jnp.where(jnp.isnan(response_times), jnp.nan, d1d2_ratio)
+    slopes = jnp.where(jnp.isnan(response_times), jnp.nan, slopes)
+    d1d2_ratio = d1d2_ratio[~jnp.isnan(d1d2_ratio)]
+    slopes = slopes[~jnp.isnan(slopes)]
     # for i in [0]#,1]:
-    slopes = jnp.where(jnp.isnan(d1d2_ratio), jnp.nan, slopes)
+    #slopes = jnp.where(jnp.isnan(d1d2_ratio), jnp.nan, slopes)
+    #d1d2_ratio = jnp.where(jnp.isnan(slopes), jnp.nan, d1d2_ratio)
 
     fig, ax = plt.subplots(1, 1, figsize=(1.8, 1.5), sharey=True)
-    for i, slope in enumerate(slopes):
-        d1d2_copy = d1d2_ratio.copy()
-        d1d2_copy = jnp.where(jnp.isnan(slope), jnp.nan, d1d2_copy)
-        d1d2_copy = d1d2_copy[~jnp.isnan(d1d2_copy)]
-        slope = slope[~jnp.isnan(slope)]
 
-        d1d2_copy = np.array(d1d2_copy)
-        slope = np.array(slope)
+    d1d2_copy = np.array(d1d2_ratio).flatten()
+    slope = np.array(slopes).flatten()
 
-        # ax = axs[i]
-        ax.scatter(slope, d1d2_copy, c='blue', alpha=0.1)
-        # calculate and plot a linear regression line for the regression
-        sl, intercept, r_value, p_value, std_err = stats.linregress(slope, d1d2_copy)
-        # create a p value string: if p_value is 0, print p<0.001, else print p={p_value}
-        if p_value < 0.001:
-            p_val_str = 'p<0.001'
-        else:
-            p_value = round(p_value, 3)
-            p_val_str = f'p={p_value}'
+    # ax = axs[i]
+    ax.scatter(slope, d1d2_copy, c='blue', alpha=0.1)
+    # calculate and plot a linear regression line for the regression
+    sl, intercept, r_value, p_value, std_err = stats.linregress(slope, d1d2_copy)
+    # create a p value string: if p_value is 0, print p<0.001, else print p={p_value}
+    if p_value < 0.001:
+        p_val_str = 'p<0.001'
+    else:
+        p_value = round(p_value, 3)
+        p_val_str = f'p={p_value}'
 
-        print(p_value)
-        # calculate a line of best fit
-        # sort snc
-        slope_sorted = np.sort(slope)
-        line = sl * slope_sorted + intercept
-        ax.plot(slope_sorted, line, c='black', label=f'y={sl:.2f}x+{intercept:.2f}')
-        # above the line, plot the r2 and p value
-        text_str = f'R^2={r_value:.2f}\n{p_val_str}'
-        ax.text(0.05, 0.95, text_str, ha='left', va='top', transform=ax.transAxes)
-        ax.set_xlabel('cortical ramp slope')
+    print(p_value)
+    # calculate a line of best fit
+    # sort snc
+    slope_sorted = np.sort(slope)
+    line = sl * slope_sorted + intercept
+    ax.plot(slope_sorted, line, c='black', label=f'y={sl:.2f}x+{intercept:.2f}')
+    # above the line, plot the r2 and p value
+    text_str = f'R^2={r_value:.2f}\n{p_val_str}'
+    ax.text(0.05, 0.95, text_str, ha='left', va='top', transform=ax.transAxes)
+    ax.set_xlabel('cortical ramp slope')
         # ax.set_title(f'{brain_areas[i]}')
     # ax.set_title('D1:D2 ratio vs. Response time')
     ax.set_ylabel('dSPN-iSPN activity')

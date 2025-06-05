@@ -455,45 +455,60 @@ def remove_outliers_from_array(data, threshold=3):
     mask = z > threshold
     return jnp.where(mask, jnp.nan, data)
 
-def get_d1_d2_ratio(all_xs, start=0, stop=300, remove_outliers=True):
-    #xs dims (trials, time-gaps,
+def get_d1_d2_ratio(all_xs, t_start=None, t_end=None, avg_time=False, remove_outliers=True):
+    if t_start is None:
+        t_start = 100
+    if t_end is None:
+        t_end = 300
+
+    #xs dims (trials, time-gaps, time-steps, neurons)
     brain_areas = ['D1', 'D2']
     area_activities = []
     for area in brain_areas:
         area_activity = get_brain_area(area, all_xs)
         aa1 = jnp.stack(
-            [align_to_cue(area_activity[seed], cs.test_start_t, new_T=500) for seed in range(cs.n_seeds)]
+            [align_to_cue(area_activity[seed], cs.test_start_t) for seed in range(cs.n_seeds)]
         )
         aa1 = baseline_subtract(aa1)
 
-        aa2 = aa1[:,:,100:300,:] #get the pre-movement activity
+        aa2 = aa1[:,:,t_start:t_end,:] #get the pre-movement activity
         aa3 = aa2.mean(axis=3) #average across neurons
-        aa4 = aa3.mean(axis=2) #average across time
-        area_activities.append(aa4)
+        #aa4 = aa3.mean(axis=2) #average across time
+        area_activities.append(aa3)
 
     #for each trial (in dim 0), calculate the ratio of D1 to D2 activity
     #ratio = area_activities[0] / area_activities[1]
     ratio = area_activities[0] - area_activities[1]
+    if avg_time:
+        ratio = ratio.mean(axis=2)
     if remove_outliers:
         ratio = remove_outliers_from_array(ratio)
 
     #ratio = ratio.flatten()
     return ratio
 
-def get_slope(all_xs, remove_outliers=True):
-    t_winstart = 20
-    t_winend = 50
-    t_elap = t_winend - t_winstart
+def get_slope(all_xs, t_start=None, t_end=None, avg_neurons=False, remove_outliers=True):
+    if t_start is None:
+        t_start = 20
+    if t_end is None:
+        t_end = 50
+    t_elap = t_end - t_start
     xs_slope = []
     for i in range(len(all_xs)):
-        aligned = align_to_cue(all_xs[i], cs.test_start_t)
+        xs = all_xs[i]
+        aligned = jnp.stack(
+            [align_to_cue(xs[seed], cs.test_start_t) for seed in range(cs.n_seeds)])
         aligned = baseline_subtract(aligned)
         #get the firing rate 100ms after the cue
-        start = aligned[:, :, t_winstart, :]
-        end = aligned[:, :, t_winend, :]
+        start = aligned[:, :, t_start, :]
+        end = aligned[:, :, t_end, :]
         slope = (end - start)/t_elap
+
+        if avg_neurons:
+            slope = slope.mean(axis=2)
+
         if remove_outliers:
-            xs_slope = remove_outliers_from_array(jnp.stack(xs_slope))
+            slope=remove_outliers_from_array(slope)
         xs_slope.append(slope)
 
     return xs_slope
