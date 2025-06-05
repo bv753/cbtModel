@@ -1,4 +1,5 @@
 import matplotlib
+
 matplotlib.use('Qt5Agg')
 #set the font to arial
 matplotlib.rcParams['font.family'] = 'Arial'
@@ -87,20 +88,19 @@ def plot_cue_algn_activity(all_xs, all_zs, noiseless=False):
         aligned_zs.append(mf.align_to_cue(all_zs[seed_idx], cs.test_start_t, new_T=new_T))
     aligned_xs = [jnp.array(aligned_x) for aligned_x in aligned_xs]
     aligned_zs = jnp.array(aligned_zs)
-    x_axis = (jnp.arange(new_T+100)-100) / 100
-
+    x_axis = (jnp.arange(new_T + 100) - 100) / 100
 
     fig, axs = plt.subplots(5, 3, figsize=(6, 8), sharex=True)
     for idx, name in enumerate(['D1', 'D2', 'Cortex', 'Thalamus', 'SNc']):
         area_activity = mf.get_brain_area(name, aligned_xs, aligned_zs)
         colors = plt.cm.coolwarm(jnp.linspace(0, 1, area_activity.shape[1]))
         area_activity = area_activity.mean(axis=-1)
-        ax = axs[idx,0]
+        ax = axs[idx, 0]
         for i in range(area_activity.shape[1]):
-            condition_activity = area_activity[:,i]
+            condition_activity = area_activity[:, i]
             for j in range(condition_activity.shape[0]):
                 ax.plot(x_axis, condition_activity[j], c=colors[i], label=f'Condition {i}', linewidth=0.1)
-        ax = axs[idx,1]
+        ax = axs[idx, 1]
         for i in range(area_activity.shape[1]):
             condition_activity = area_activity[:, i]
             mean_act, sem_act = mf.compute_mean_sem(condition_activity)  # (n_conditions, T)
@@ -112,7 +112,7 @@ def plot_cue_algn_activity(all_xs, all_zs, noiseless=False):
                 color=colors[i],
                 alpha=0.3,
             )
-        ax = axs[idx,2]
+        ax = axs[idx, 2]
         mean_1 = jnp.mean(area_activity, axis=1)
         mean_act, sem_act = mf.compute_mean_sem(mean_1)
         ax.plot(x_axis, mean_act, c='black')
@@ -140,7 +140,7 @@ def plot_response_times(valid_response_times):
     cue_end_t = (cue_start_t + cs.config['T_cue']) / 100
 
     fig = plt.figure(figsize=(1.8, 1.8))
-    plt.hist(valid_response_times, bins=20, color='blue', alpha=0.7, edgecolor='black',density=True
+    plt.hist(valid_response_times, bins=20, color='blue', alpha=0.7, edgecolor='black', density=True
              )
     plt.xlabel('time after cue (s)')
     plt.ylabel('Density')
@@ -175,7 +175,6 @@ def plot_response_times(valid_response_times):
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, alpha=1, n=100):
-
     new_cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
         'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
         cmap(np.linspace(minval, maxval, n)))
@@ -217,7 +216,7 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
         aligned_zs = mf.align_to_cue(all_zs[seed_idx], cs.test_start_t, new_T=500)
         aligned_ys = mf.align_to_cue(all_ys[seed_idx], cs.test_start_t, bsln_sub=False, new_T=500)
 
-        for condition_idx in range(n_conditions): #for all cue start times
+        for condition_idx in range(n_conditions):  #for all cue start times
             response_time = response_times[seed_idx, condition_idx]
 
             # Find the corresponding bin for the current response time
@@ -397,6 +396,8 @@ def plot_binned_responses(all_ys, all_xs, all_zs):
     plt.show()
     #save as .svg and .png
     save_fig(fig, 'binned_responses_D1D2ratio')
+
+
 def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
     label_list = ['control', 'inh. dSPN', 'inh. iSPN']
     inh_ys = opto_ys[0:3]
@@ -492,11 +493,12 @@ def plot_opto_inh(opto_ys, opto_xs, opto_zs, newT=900):
         ax.axvspan(cue_start_t, cue_end_t, color='red', alpha=0.2)
         ax.axvspan(beh_start_t, t[-1], color='green', alpha=0.2)
         ax.axvspan(ops, ope, color='dodgerblue', alpha=0.2)
-        if idx == len(brain_areas)-1:
+        if idx == len(brain_areas) - 1:
             ax.set_xlabel('time after cue (s)')
     plt.tight_layout()
     plt.show()
     save_fig(fig, 'opto_inh_demo')
+
 
 def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
     label_list = ['control', 'stim. dSPN', 'stim. iSPN']
@@ -507,8 +509,6 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
     colors = ['black', 'green', 'red']
     brain_areas = ['D1', 'D2', 'Cortex', 'Thalamus', 'SNc']
     brain_area_names = ['dSPN', 'iSPN', 'Cortex', 'Thalamus', 'SNc']
-
-
 
     fig = plt.figure(figsize=(1.6, 1.6))
     for stim_idx, label in enumerate(label_list):
@@ -538,7 +538,6 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
     for stim_idx, label in enumerate(label_list):
         ys = stim_ys[stim_idx]
         resp_times.append(mf.get_response_times_opto(ys, exclude_nan=False))
-
 
     fig, axs = plt.subplots(5, 1, figsize=(1.8, 4), sharex=True)
     for idx, name in enumerate(brain_areas):
@@ -577,7 +576,7 @@ def plot_opto_stim(opto_ys, opto_xs, opto_zs, newT=900):
         ax.axvspan(cue_start_t, cue_end_t, color='red', alpha=0.2)
         ax.axvspan(beh_start_t, t[-1], color='green', alpha=0.2)
         ax.axvspan(ops, ope, color='dodgerblue', alpha=0.2)
-        if idx == len(brain_areas)-1:
+        if idx == len(brain_areas) - 1:
             ax.set_xlabel('Time (s)')
     plt.tight_layout()
     plt.show()
@@ -591,8 +590,8 @@ def plot_opto(opto_xs, opto_zs, opto_ys, newT=900):
     n_stims = len(cols)
 
     stim_labels = ['inh. dSPN', 'inh. iSPN', 'stim. dSPN', 'stim. iSPN']
-    brain_areas = ['D1', 'D2', 'Cortex']#, 'Thalamus', 'SNc']
-    brain_area_labs = ['dSPNs', 'iSPNs', 'Cortex']#, 'Thalamus', 'SNc']
+    brain_areas = ['D1', 'D2', 'Cortex']  #, 'Thalamus', 'SNc']
+    brain_area_labs = ['dSPNs', 'iSPNs', 'Cortex']  #, 'Thalamus', 'SNc']
 
     cue_start_t = 0
     cue_end_t = (cue_start_t + cs.config['T_cue']) / 100
@@ -643,7 +642,6 @@ def plot_opto(opto_xs, opto_zs, opto_ys, newT=900):
     plt.tight_layout()
     plt.show()
     save_fig(fig, 'response_times_cdf_opto')
-
 
     fig, axs = plt.subplots(3, 4, figsize=(5.1, 2.8), sharex=True, sharey='row')
     for opidx, colname in enumerate(cols):
@@ -713,13 +711,12 @@ def plot_opto(opto_xs, opto_zs, opto_ys, newT=900):
     save_fig(fig, 'opto_strength_colorbar')
 
 
-
 def plot_d1d2ratio_SNc_correlogram(d1d2_ratio, all_zs, response_times):
     snc = mf.get_brain_area('SNc', xs=None, zs=all_zs, bsln_sub=False)
     snc = jnp.stack(
         [mf.align_to_cue(snc[seed], cs.test_start_t, new_T=500, bsln_sub=True) for seed in range(cs.n_seeds)]
     )
-    snc = snc[:,:,150:250, :].mean(axis=-1).mean(axis=-1)
+    snc = snc[:, :, 150:250, :].mean(axis=-1).mean(axis=-1)
 
     #verify d1d2_ratio, snc, and response_times all have the same shape, else throw exception
     if d1d2_ratio.shape != snc.shape or snc.shape != response_times.shape:
@@ -730,11 +727,11 @@ def plot_d1d2ratio_SNc_correlogram(d1d2_ratio, all_zs, response_times):
     snc_outliers = snc_z_scores > 2
     snc = jnp.where(snc_outliers, jnp.nan, snc)
 
-    #mark response time outliers as nan in d1d2_ratio and snc
+    # mark response time outliers as nan in d1d2_ratio and snc
     d1d2_ratio = jnp.where(jnp.isnan(response_times), jnp.nan, d1d2_ratio)
     snc = jnp.where(jnp.isnan(d1d2_ratio), jnp.nan, snc)
 
-    #mark snc outliers as nan in d1d2_ratio
+    # mark snc outliers as nan in d1d2_ratio
     d1d2_ratio = jnp.where(jnp.isnan(snc), jnp.nan, d1d2_ratio)
 
     d1d2_ratio = d1d2_ratio[~jnp.isnan(d1d2_ratio)]
@@ -742,15 +739,15 @@ def plot_d1d2ratio_SNc_correlogram(d1d2_ratio, all_zs, response_times):
 
     d1d2_ratio = np.array(d1d2_ratio)
     snc = np.array(snc)
-    #verify that d1d2_ratio and snc are the same shape
+    # verify that d1d2_ratio and snc are the same shape
     if d1d2_ratio.shape != snc.shape:
         raise Exception('d1d2_ratio and snc must have the same shape')
 
     fig, ax = plt.subplots(1, 1, figsize=(1.8, 1.6))
     ax.scatter(snc, d1d2_ratio, c='blue', alpha=0.1)
-    #calculate and plot a linear regression line for the regression
+    # calculate and plot a linear regression line for the regression
     slope, intercept, r_value, p_value, std_err = stats.linregress(snc, d1d2_ratio)
-    #create a p value string: if p_value is 0, print p<0.001, else print p={p_value}
+    # create a p value string: if p_value is 0, print p<0.001, else print p={p_value}
     if p_value < 0.001:
         p_val_str = 'p<0.001'
     else:
@@ -758,35 +755,36 @@ def plot_d1d2ratio_SNc_correlogram(d1d2_ratio, all_zs, response_times):
         p_val_str = f'p={p_value}'
 
     print(p_value)
-    #calculate a line of best fit
-    #sort snc
+    # calculate a line of best fit
+    # sort snc
     snc_sorted = np.sort(snc)
     line = slope * snc_sorted + intercept
     ax.plot(snc_sorted, line, c='black', label=f'y={slope:.2f}x+{intercept:.2f}')
-    #above the line, plot the r2 and p value
+    # above the line, plot the r2 and p value
     text_str = f'R^2={r_value:.2f}\n{p_val_str}'
     ax.text(0.9, 0.1, text_str, ha='right', va='bottom', transform=ax.transAxes)
 
     ax.set_ylabel('dSPN-iSPN activity')
     ax.set_xlabel('SNc activity')
-    #ax.set_title('D1:D2 ratio vs. Response time')
+    # ax.set_title('D1:D2 ratio vs. Response time')
     plt.tight_layout()
     plt.show()
     save_fig(fig, 'd1d2_ratio_vs_SNc.png')
+
 
 def plot_d1d2ratio_slope_correlogram(all_xs, response_times):
     d1d2_ratio = mf.get_d1_d2_ratio(all_xs, remove_outliers=True)
     slopes = mf.get_slope(all_xs, remove_outliers=True)
     slopes = slopes[0]
-    brain_areas = ['cortex']#, 'thalamus']
-    #verify d1d2_ratio, snc, and response_times all have the same shape, else throw exception
+    brain_areas = ['cortex']  #, 'thalamus']
+    # verify d1d2_ratio, snc, and response_times all have the same shape, else throw exception
     if d1d2_ratio.shape != slopes[0].shape or slopes[0].shape != response_times.shape:
         raise Exception('d1d2_ratio, slopes, and response_times must have the same shape')
 
-    #mark response time outliers as nan in d1d2_ratio and snc
+    # mark response time outliers as nan in d1d2_ratio and snc
     d1d2_ratio = jnp.where(jnp.isnan(response_times), jnp.nan, d1d2_ratio)
-    #for i in [0]#,1]:
-    slopes = jnp.where(jnp.isnan(d1d2_ratio), jnp.nan, slopes[i])
+    # for i in [0]#,1]:
+    slopes = jnp.where(jnp.isnan(d1d2_ratio), jnp.nan, slopes)
 
     fig, ax = plt.subplots(1, 1, figsize=(1.8, 1.5), sharey=True)
     for i, slope in enumerate(slopes):
@@ -798,11 +796,11 @@ def plot_d1d2ratio_slope_correlogram(all_xs, response_times):
         d1d2_copy = np.array(d1d2_copy)
         slope = np.array(slope)
 
-        #ax = axs[i]
+        # ax = axs[i]
         ax.scatter(slope, d1d2_copy, c='blue', alpha=0.1)
-        #calculate and plot a linear regression line for the regression
+        # calculate and plot a linear regression line for the regression
         sl, intercept, r_value, p_value, std_err = stats.linregress(slope, d1d2_copy)
-        #create a p value string: if p_value is 0, print p<0.001, else print p={p_value}
+        # create a p value string: if p_value is 0, print p<0.001, else print p={p_value}
         if p_value < 0.001:
             p_val_str = 'p<0.001'
         else:
@@ -810,42 +808,43 @@ def plot_d1d2ratio_slope_correlogram(all_xs, response_times):
             p_val_str = f'p={p_value}'
 
         print(p_value)
-        #calculate a line of best fit
-        #sort snc
+        # calculate a line of best fit
+        # sort snc
         slope_sorted = np.sort(slope)
         line = sl * slope_sorted + intercept
         ax.plot(slope_sorted, line, c='black', label=f'y={sl:.2f}x+{intercept:.2f}')
-        #above the line, plot the r2 and p value
+        # above the line, plot the r2 and p value
         text_str = f'R^2={r_value:.2f}\n{p_val_str}'
         ax.text(0.05, 0.95, text_str, ha='left', va='top', transform=ax.transAxes)
         ax.set_xlabel('cortical ramp slope')
-        #ax.set_title(f'{brain_areas[i]}')
-    #ax.set_title('D1:D2 ratio vs. Response time')
-    axs[0].set_ylabel('dSPN-iSPN activity')
+        # ax.set_title(f'{brain_areas[i]}')
+    # ax.set_title('D1:D2 ratio vs. Response time')
+    ax.set_ylabel('dSPN-iSPN activity')
     plt.tight_layout()
     plt.show()
     save_fig(fig, 'd1d2_ratio_vs_ramp_slopes')
 
+
 def plot_ratio_rt_correlogram(d1d2_ratio, response_times):
     # plot a correlogram of the d1d2 ratio and response times,
     # assuming both are arrays of equal length
-    #mark all entries in d1d2 ratio that are nan in response times as nan
+    # mark all entries in d1d2 ratio that are nan in response times as nan
     d1d2_ratio = jnp.where(jnp.isnan(response_times), jnp.nan, d1d2_ratio)
-    #mark all entries in response times that are nan in d1d2 ratio as nan
+    # mark all entries in response times that are nan in d1d2 ratio as nan
     response_times = jnp.where(jnp.isnan(d1d2_ratio), jnp.nan, response_times)
 
-    #remove all nan values from d1d2_ratio and response times
+    # remove all nan values from d1d2_ratio and response times
     d1d2_ratio = d1d2_ratio[~jnp.isnan(d1d2_ratio)]
     response_times = response_times[~jnp.isnan(response_times)]
-    #convert response times and d1d2_ratio to numpy arrays
+    # convert response times and d1d2_ratio to numpy arrays
     response_times = np.array(response_times)
     d1d2_ratio = np.array(d1d2_ratio)
 
     fig, ax = plt.subplots(1, 1, figsize=(1.8, 1.5))
     ax.scatter(response_times, d1d2_ratio, c='blue', alpha=0.1)
-    #calculate and plot a linear regression line for the regression
+    # calculate and plot a linear regression line for the regression
     slope, intercept, r_value, p_value, std_err = stats.linregress(response_times, d1d2_ratio)
-    #create a p value string: if p_value is 0, print p<0.001, else print p={p_value}
+    # create a p value string: if p_value is 0, print p<0.001, else print p={p_value}
     if p_value < 0.001:
         p_val_str = 'p<0.001'
     else:
@@ -853,40 +852,42 @@ def plot_ratio_rt_correlogram(d1d2_ratio, response_times):
         p_val_str = f'p={p_value}'
 
     print(p_value)
-    #calculate a line of best fit
+    # calculate a line of best fit
     line = slope * response_times + intercept
     ax.plot(response_times, line, c='black', label=f'y={slope:.2f}x+{intercept:.2f}')
-    #above the line, plot the r2 and p value
+    # above the line, plot the r2 and p value
     text_str = f'R^2={r_value:.2f}\n{p_val_str}'
     ax.text(0.95, 0.95, text_str, ha='right', va='top', transform=ax.transAxes)
-    #set the y limit from 0 to 5
-    #ax.set_ylim(2, 5)
-    ax.set_xticks([2,3,4,5])
+    # set the y limit from 0 to 5
+    # ax.set_ylim(2, 5)
+    ax.set_xticks([2, 3, 4, 5])
     ax.set_ylabel('dSPN-iSPN activity')
     ax.set_xlabel('response time after cue (s)')
-    #ax.set_title('D1:D2 ratio vs. Response time')
+    # ax.set_title('D1:D2 ratio vs. Response time')
     plt.tight_layout()
     plt.show()
     save_fig(fig, 'd1d2_ratio_vs_response_time')
 
+
 def plot_loss_function():
     fig, ax = plt.subplots(1, 1, figsize=(1.6, 1.6))
-    #make an array of x values from -0.1
+    # make an array of x values from -0.1
     x = np.linspace(-0.1, 6, 100)
-    #get indices of x greater than 3 and less than 3.4
+    # get indices of x greater than 3 and less than 3.4
 
     plt.tight_layout()
     plt.show()
     plt.savefig('loss_function.png', dpi=900)
 
+
 def plot_loss_function_adaptive():
     fig, axs = plt.subplots(1, 2, figsize=(2.6, 1.4), sharey=True)
-    #make an array of x values from -0.1
+    # make an array of x values from -0.1
     x = np.linspace(-0.1, 6, 100)
 
     ax = axs[0]
     mask = (x >= 3) & (x <= 3.4)
-    #each y value should be zero
+    # each y value should be zero
     y = np.zeros(100)
     #set all values of y where mask is true to 1
     y[mask] = 1
@@ -894,9 +895,9 @@ def plot_loss_function_adaptive():
     ax.axvspan(0, 0.1, color='red', alpha=0.2)
     ax.axvspan(3, 6, color='green', alpha=0.1)
 
-    #plot a bell curve centered at 4.2
+    # plot a bell curve centered at 4.2
     x0 = np.linspace(0, 6, 100)
-    y = np.exp(-(x0-2.2)**2 / 0.1)
+    y = np.exp(-(x0 - 2.2) ** 2 / 0.1)
     ax.plot(x0, y, c='black', linestyle='--', alpha=0.5)
 
     ax.set_xlabel('time after cue (s)')
@@ -904,7 +905,7 @@ def plot_loss_function_adaptive():
     ax.set_xticks([0, 3, 6])
 
     ax = axs[1]
-    #get indices of x greater than 3 and less than 3.4
+    # get indices of x greater than 3 and less than 3.4
     mask = (x >= 4) & (x <= 4.4)
     #each y value should be zero
     y = np.zeros(100)
@@ -916,7 +917,7 @@ def plot_loss_function_adaptive():
 
     #plot a bell curve centered at 4.2
     x0 = np.linspace(0, 6, 100)
-    y = np.exp(-(x-4.2)**2 / 0.1)
+    y = np.exp(-(x - 4.2) ** 2 / 0.1)
     ax.plot(x0, y, c='black', linestyle='--', alpha=0.5)
 
     ax.set_xlabel('time after cue (s)')
@@ -925,6 +926,7 @@ def plot_loss_function_adaptive():
     plt.tight_layout()
     plt.show()
     save_fig(fig, 'adaptive_loss_function')
+
 
 def save_fig(fig, name):
     svgname = cs.svg_folder + '/' + name + '.svg'
