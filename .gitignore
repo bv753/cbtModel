@@ -1,2 +1,4 @@
 #general files for mac
 .DS_Store
+.idea
+.xml
