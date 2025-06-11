@@ -4,6 +4,7 @@ import optax
 import math
 import os
 
+# test commit
 
 def init_params(key, n_bg, n_nm, g_bg, g_nm, input_dim, output_dim):
     # for now assume Th/BG/C are same size, g is the same for all weight matrices
